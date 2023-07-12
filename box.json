@@ -32,7 +32,7 @@
         "str":"^3.0.1"
     },
     "devDependencies":{
-        "coldbox":"^7.0.0+7",
+        "coldbox":"^6",
         "testbox":"^5.1.0+2"
     },
     "installPaths":{
