@@ -44,10 +44,16 @@ jobs:
           box install ${{ matrix.coldbox }} --noSave
 
       - name: Migrate database
+        env:
+          DB_HOST: localhost
+          DB_PORT: ${{ job.services.mysql.ports[3306] }}
+          DB_NAME: megaphone
+          DB_USER: megaphone
+          DB_PASSWORD: megaphone
         run: |
           box install commandbox-migrations
-          box migrate install
-          box migrate up
+          box migrate install --verbose
+          box migrate up --verbose
 
       - name: Start server
         env:
