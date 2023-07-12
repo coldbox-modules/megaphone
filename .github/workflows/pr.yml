@@ -69,6 +69,7 @@ jobs:
           DB_NAME: megaphone
           DB_USER: megaphone
           DB_PASSWORD: megaphone
+          COLDBOX_VERSION: ${{ matrix.coldbox }}
         run: box server start cfengine=${{ matrix.cfengine }}
 
       - name: Run TestBox Tests
@@ -78,6 +79,7 @@ jobs:
           DB_NAME: megaphone
           DB_USER: megaphone
           DB_PASSWORD: megaphone
+          COLDBOX_VERSION: ${{ matrix.coldbox }}
         run: box testbox run
 
   format:
