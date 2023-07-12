@@ -43,6 +43,12 @@ jobs:
           box config set modules.commandbox-dotenv.checkEnvPreServerStart=false
           box install ${{ matrix.coldbox }} --noSave
 
+      - name: Migrate database
+        run: |
+          box install commandbox-migrations
+          box migrate install
+          box migrate up
+
       - name: Start server
         env:
           DB_HOST: localhost
@@ -51,10 +57,6 @@ jobs:
           DB_USER: megaphone
           DB_PASSWORD: megaphone
         run: box server start cfengine=${{ matrix.cfengine }} javaVersion=${{ matrix.javaVersion }}
-
-      - name: CFPM
-        if: ${{ matrix.cfengine == 'adobe@2021' || matrix.cfengine == 'adobe@2023' }}
-        run: box run-script install:cfpm
 
       - name: Run TestBox Tests
         env:

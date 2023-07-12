@@ -20,20 +20,26 @@
     "shortDescription":"A protocol-based library for sending Notifications in ColdBox",
     "description":"A protocol-based library for sending Notifications in ColdBox",
     "scripts":{
-        "format":"cfformat run models/**/*.cfc,tests/specs/**/*.cfc --overwrite",
-        "format:check":"cfformat check models/**/*.cfc,tests/specs/**/*.cfc --verbose",
-        "format:watch":"cfformat watch models/**/*.cfc,tests/specs/**/*.cfc",
-        "install:cfpm":"cfpm install document,feed,mysql,zip"
+        "format":"cfformat run models/**/*.cfc,dsl/**/*.cfc,resources/**/*.cfc,tests/specs/**/*.cfc,tests/specs/**/*.cfc,tests/resources/**/*.cfc --overwrite",
+        "format:check":"cfformat check models/**/*.cfc,dsl/**/*.cfc,resources/**/*.cfc,tests/specs/**/*.cfc,tests/specs/**/*.cfc,tests/resources/**/*.cfc --verbose",
+        "format:watch":"cfformat watch models/**/*.cfc,dsl/**/*.cfc,resources/**/*.cfc,tests/specs/**/*.cfc,tests/specs/**/*.cfc,tests/resources/**/*.cfc",
+        "install:cfpm":"cfpm install mysql,debugger",
+        "onServerInitialInstall":"run-script install:cfpm"
     },
     "type":"modules",
-    "dependencies":{},
+    "dependencies":{
+        "qb":"^9.4.0",
+        "str":"^3.0.1"
+    },
     "devDependencies":{
         "coldbox":"^7.0.0+7",
         "testbox":"^5.1.0+2"
     },
     "installPaths":{
         "coldbox":"tests/resources/app/coldbox/",
-        "testbox":"testbox/"
+        "testbox":"testbox/",
+        "qb":"modules/qb/",
+        "str":"modules/str/"
     },
     "ignore":[
         "**/.*",

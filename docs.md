@@ -1,8 +1,3 @@
-# Megaphone
-
-## A protocol-based library for sending Notifications in ColdBox
-
-## Documentation
 Installation: `box install megaphone`
 
 Config:

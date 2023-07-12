@@ -16,6 +16,9 @@ component {
     this.mappings[ "/root" ] = rootPath;
     this.mappings[ "/testingModuleRoot" ] = listDeleteAt( rootPath, listLen( rootPath, '\/' ), "\/" );
     this.mappings[ "/megaphone" ] = listDeleteAt( rootPath, listLen( rootPath, '\/' ), "\/" );
+    this.mappings[ "/qb" ] = rootPath & "/modules/qb";
+    this.mappings[ "/cfmigrations" ] = rootPath & "/modules/cfmigrations";
+    this.mappings[ "/str" ] = rootPath & "/modules/str";
     this.mappings[ "/app" ] = testsPath & "resources/app";
     this.mappings[ "/coldbox" ] = testsPath & "resources/app/coldbox";
     this.mappings[ "/testbox" ] = rootPath & "/testbox";
@@ -27,6 +30,8 @@ component {
     }
 
     function onRequestStart() {
+        // applicationStop();
+        // abort;
         setting requestTimeout="180";
 
         // New ColdBox Virtual Application Starter
