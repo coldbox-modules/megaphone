@@ -1,16 +1,8 @@
-name: PRs and Branches
+name: Cron
 
 on:
-  push:
-    branches-ignore:
-      - "main"
-      - "master"
-      - "development"
-  pull_request:
-    branches:
-      - main
-      - master
-      - development
+  schedule:
+    - cron:  0 0 * * 1
 
 jobs:
   tests:
@@ -19,8 +11,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cfengine: ["lucee@5", "adobe@2021", "adobe@2023"]
-        coldbox: ["coldbox@6", "coldbox@7"]
+        cfengine: ["lucee@5", "lucee@be", "adobe@2021", "adobe@2023", "adobe@be"]
+        coldbox: ["coldbox@6", "coldbox@7", "coldbox@be"]
+        javaVersion: ["openjdk8", "openjdk11"]
     services:
       mysql:
         image: mysql:8
@@ -57,7 +50,7 @@ jobs:
           DB_NAME: megaphone
           DB_USER: megaphone
           DB_PASSWORD: megaphone
-        run: box server start cfengine=${{ matrix.cfengine }}
+        run: box server start cfengine=${{ matrix.cfengine }} javaVersion=${{ matrix.javaVersion }}
 
       - name: CFPM
         if: ${{ matrix.cfengine == 'adobe@2021' || matrix.cfengine == 'adobe@2023' }}
@@ -71,29 +64,3 @@ jobs:
           DB_USER: megaphone
           DB_PASSWORD: megaphone
         run: box testbox run
-
-  format:
-    runs-on: ubuntu-latest
-    name: Format
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v2
-
-      - name: Setup Java JDK
-        uses: actions/setup-java@v1.4.3
-        with:
-          java-version: 11
-
-      - name: Set Up CommandBox
-        uses: elpete/setup-commandbox@v1.0.0
-
-      - name: Install CFFormat
-        run: box install commandbox-cfformat
-
-      - name: Run CFFormat
-        run: box run-script format
-
-      - name: Commit Format Changes
-        uses: stefanzweifel/git-auto-commit-action@v4
-        with:
-          commit_message: Apply cfformat changes

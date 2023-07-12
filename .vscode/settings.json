@@ -1,14 +1,23 @@
 {
-	"cfml.mappings": [
-		{
-			"logicalPath": "/coldbox",
-			"directoryPath": "./test-harness/coldbox",
-			"isPhysicalDirectoryPath": false
-		},
-		{
-			"logicalPath": "/testbox",
-			"directoryPath": "./test-harness/testbox",
-			"isPhysicalDirectoryPath": false
-		}
-	]
+    "workbench.colorCustomizations": {
+        "activityBar.activeBackground": "#9fd6e8",
+        "activityBar.activeBorder": "#da65bd",
+        "activityBar.background": "#9fd6e8",
+        "activityBar.foreground": "#15202b",
+        "activityBar.inactiveForeground": "#15202b99",
+        "activityBarBadge.background": "#da65bd",
+        "activityBarBadge.foreground": "#15202b",
+        "sash.hoverBorder": "#9fd6e8",
+        "statusBar.background": "#76c4de",
+        "statusBar.foreground": "#15202b",
+        "statusBarItem.hoverBackground": "#4db2d4",
+        "statusBarItem.remoteBackground": "#76c4de",
+        "statusBarItem.remoteForeground": "#15202b",
+        "titleBar.activeBackground": "#76c4de",
+        "titleBar.activeForeground": "#15202b",
+        "titleBar.inactiveBackground": "#76c4de99",
+        "titleBar.inactiveForeground": "#15202b99",
+        "commandCenter.border": "#15202b99"
+    },
+    "peacock.color": "#76C4DE"
 }

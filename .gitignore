@@ -1,21 +1,9 @@
-# Artifacts and temp folders
-.artifacts/**
-.tmp/**
-.DS_Store
+/testbox
+/tests/results
+/tests/resources/app/coldbox
+/modules
 
-# Engine + Secrets
+.vscode
+
 .env
-.engine/**
-
-# Dependencies
-test-harness/coldbox/**
-test-harness/docbox/**
-test-harness/testbox/**
-test-harness/logs/**
-test-harness/modules/**
-
-# modules
-modules/**
-
-# log files
-logs/**
+.tmp
