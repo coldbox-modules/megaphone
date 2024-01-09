@@ -181,8 +181,10 @@ component {
 
 }
 ```
-Lastly, there's some specific information for Database notifications.
 
+## Providers
+
+### DatabaseProvider
 First, here's the migration file (it will also be av available in the module under `resources/database/migrations`):
 ```cfc
 component {
@@ -316,3 +318,93 @@ cursor.next(); // loads next page from database
 cursor.markAllAsRead( readDate = now() ); // marks all as read, not just current page. default = now()
 cursor.deleteAll(); // deletes all, not just current page
 ```
+
+### EmailProvider
+
+#### Dependencies
+The `EmailProvider` requires `cbmailservices` to be installed.
+
+#### Usage
+To send via the `EmailProvider`, add a `toEmail` method to your notification:
+
+```cfc
+public Mail function toEmail( notifiable, newMail ) {
+    return newMail(
+        from: "noreply@example.com",
+        subject: "Megaphone Email Notification",
+        type: "html",
+        bodyTokens: { product: "ColdBox" }
+    ).setBody( "
+        <p>Thank you for downloading @product@, have a great day!</p>
+    " )
+}
+```
+
+In addition to the notifiable instance in the parameters, you will receive a `newMail` function that will give you a `Mail` instance from `cbmailservices`.
+
+You must return a `Mail` instance from the method.  You do not need to call `send` yourself. `megaphone` will handle sending the email.
+
+The email recipient can be set in two ways.  First, you can explicitly set the `to` in the `toEmail` method:
+
+```cfc
+public Mail function toEmail( notifiable, newMail ) {
+	return newMail(
+		to: notifiable.getEmail(),
+		from: "noreply@example.com",
+		subject: "Megaphone Email Notification",
+		type: "html",
+		bodyTokens: { product: "ColdBox" }
+	).setBody( "
+		<p>Thank you for downloading @product@, have a great day!</p>
+	" )
+}
+```
+
+Second, you can let your `notifiable` instance define where to send the email.  You do this by implementing a new method on your notifiable instance: `routeNotificationForEmail`.
+
+```cfc
+component name="User" accessors="true" {
+
+    property name="id";
+    property name="email";
+
+    public string function getNotifiableId() {
+        return getId();
+    }
+
+    public string function getNotifiableType() {
+        return "User";
+    }
+
+    public string function routeNotificationForEmail() {
+        return getEmail();
+    }
+
+}
+```
+
+Any time you want `megaphone` to set the recipient implicitly, all your notifiables receiving the email need to implement the `routeNotificationForEmail` method.
+If you do not send emails to a notifiable type or you always explicity set the recipient, you may omit this method.
+
+#### Configuration
+An `EmailProvider` can be configured with three properties:
+```cfc
+moduleSettings = {
+    "megaphone": {
+        "channels": {
+            "email": {
+                "provider": "EmailProvider@megaphone",
+                "properties": {
+                    "mailer": "default",
+                    "onSuccess": () => {},
+                    "onError": () => {}
+                }
+            }
+        }
+    }
+}
+```
+
+The `mailer` property is the default mailer for this channel. (It does not have to be the `default` mailer in cbMailservices.) If you set the mailer when calling `newMail` in your notification, your custom mailer will override the channel default.
+
+The `onSuccess` and `onError` callbacks are the default callbacks called on the `Mail` object after is has been sent.  By default, these are both no-ops.

@@ -32,6 +32,8 @@ component {
             return { "error": false, "data": "Welcome to my awesome API!" };
         } );
 
+        resources( "notifications" );
+
         // @app_routes@
 
         // Conventions-Based Routing

@@ -33,13 +33,15 @@
     },
     "devDependencies":{
         "coldbox":"^6",
-        "testbox":"^5.1.0+2"
+        "testbox":"^5.1.0+2",
+        "cbmailservices":"^2.8.0+1"
     },
     "installPaths":{
         "coldbox":"tests/resources/app/coldbox/",
         "testbox":"testbox/",
         "qb":"modules/qb/",
-        "str":"modules/str/"
+        "str":"modules/str/",
+        "cbmailservices":"tests/resources/app/modules/cbmailservices/"
     },
     "ignore":[
         "**/.*",

@@ -5,6 +5,19 @@ component {
      * https://coldbox.ortusbooks.com/getting-started/configuration
      */
     function configure() {
+        moduleSettings = {
+            "megaphone": {
+                "channels": {
+                    "database": {
+                        "provider": "DatabaseProvider@megaphone",
+                        "properties": { "tableName": "megaphone_notifications", "datasource": "megaphone" }
+                    },
+                    "email": { "provider": "EmailProvider@megaphone", "properties": {} }
+                }
+            },
+            "cbmailservices": { "mailers": { "default": { "class": "InMemory" } } }
+        };
+
         /**
          * --------------------------------------------------------------------------
          * ColdBox Directives
@@ -124,30 +137,6 @@ component {
          * Remember that the order of declaration is the order they will be registered and fired
          */
         interceptors = [];
-
-        /**
-         * --------------------------------------------------------------------------
-         * Module Settings
-         * --------------------------------------------------------------------------
-         * Each module has it's own configuration structures, so make sure you follow
-         * the module's instructions on settings.
-         *
-         * Each key is the name of the module:
-         *
-         * myModule = {
-         *
-         * }
-         */
-        moduleSettings = {
-            "megaphone": {
-                "channels": {
-                    "database": {
-                        "provider": "DatabaseProvider@megaphone",
-                        "properties": { "tableName": "megaphone_notifications", "datasource": "megaphone" }
-                    }
-                }
-            }
-        };
 
         /**
          * --------------------------------------------------------------------------

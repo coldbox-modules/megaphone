@@ -22,7 +22,12 @@ component accessors="true" {
         return this;
     }
 
-    public any function routeForType( required string type, required any notifiable, required string channelName ) {
+    public any function routeForType(
+        required string type,
+        required any notifiable,
+        required string channelName,
+        struct additionalArgs = {}
+    ) {
         if ( !structKeyExists( variables, "to" & arguments.type ) ) {
             var routingMethodName = str().camel( "to_#arguments.type#" );
             throw(
@@ -31,7 +36,10 @@ component accessors="true" {
             );
         }
 
-        return invoke( this, "to" & arguments.type, { "notifiable": arguments.notifiable } );
+        var args = [ "notifiable": arguments.notifiable ];
+        args.append( arguments.additionalArgs, false );
+
+        return invoke( this, "to" & arguments.type, args );
     }
 
     public string function getNotificationType() {

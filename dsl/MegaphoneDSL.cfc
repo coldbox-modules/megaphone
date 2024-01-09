@@ -4,11 +4,11 @@
 component {
 
     /**
-     * Creates the Quick Service DSL Processor.
+     * Creates the Megaphone Service DSL Processor.
      *
      * @injector  The WireBox injector.
      *
-     * @return    QuickServiceDSL
+     * @return    MegaphoneDSL
      */
     public MegaphoneDSL function init( required Injector injector ) {
         variables.injector = arguments.injector;
@@ -16,12 +16,12 @@ component {
     }
 
     /**
-     * Creates a Quick BaseService from the dsl.
+     * Creates a Megaphone Provider from the dsl.
      * The portion after the colon is used as the entity mapping.
      *
      * @definition  The dsl struct definition.
      *
-     * @return      BaseService or extending component.
+     * @return      BaseProvider or extending component.
      */
     public any function process( required struct definition ) {
         param variables.megaphone = variables.injector.getInstance( "NotificationService@megaphone" );

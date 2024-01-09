@@ -1,6 +1,6 @@
 component extends="coldbox.system.testing.BaseTestCase" appMapping="/app" {
 
-    /*********************************** LIFE CYCLE Methods ***********************************/
+    property name="wirebox" inject="wirebox";
 
     function beforeAll() {
         super.beforeAll();

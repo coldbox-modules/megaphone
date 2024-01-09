@@ -1,11 +1,13 @@
 component extends="coldbox.system.EventHandler" {
 
+    property name="megaphone" inject="NotificationService@megaphone";
+
     /**
      * Default Action
      */
     function index( event, rc, prc ) {
-        prc.welcomeMessage = "Welcome to ColdBox!";
-        event.setView( "main/index" );
+        var userA = getInstance( "User" ).setId( 1 );
+        megaphone.notify( userA, "TestNotification", { "message": "Hello, world!" } );
     }
 
     /**
