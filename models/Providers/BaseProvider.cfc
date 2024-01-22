@@ -2,8 +2,14 @@ component accessors="true" {
 
     property name="str" inject="@str";
 
-    property name="name" type="string";
-    property name="properties" type="struct";
+    property name="name" type="string" setter="false";
+    property name="properties" type="struct" setter="false";
+
+    public BaseProvider function init( required string name, struct properties = {} ) {
+        variables.name = arguments.name;
+        variables.properties = arguments.properties;
+        return this;
+    }
 
     public string function getProviderName() {
         throw(
@@ -22,10 +28,12 @@ component accessors="true" {
     public any function routeNotificationFor(
         required string type,
         required any notifiable,
-        required string channelName
+        required string channelName,
+        struct additionalArgs = {},
+        boolean optional = false
     ) {
         var methodName = "routeNotificationFor" & arguments.type;
-        if ( !structKeyExists( notifiable, methodName ) ) {
+        if ( !structKeyExists( notifiable, methodName ) && !arguments.optional ) {
             var routingToMethodName = variables.str.camel( "to_#arguments.type#" );
             var routingForMethodName = variables.str.camel( "route_notification_for_#arguments.type#" );
             throw(
@@ -34,7 +42,7 @@ component accessors="true" {
             );
         }
 
-        return invoke( arguments.notifiable, methodName );
+        return invoke( arguments.notifiable, methodName, arguments.additionalArgs );
     }
 
 }

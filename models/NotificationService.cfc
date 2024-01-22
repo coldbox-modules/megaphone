@@ -39,10 +39,10 @@ component singleton accessors="true" {
 
         for ( var key in arguments.channels ) {
             var configuration = arguments.channels[ key ];
-            variables.channels[ key ] = variables.wirebox
-                .getInstance( configuration.provider )
-                .setProperties( configuration.properties )
-                .setName( key );
+            variables.channels[ key ] = variables.wirebox.getInstance(
+                configuration.provider,
+                { "name": key, "properties": configuration.properties }
+            );
         }
 
         return this;

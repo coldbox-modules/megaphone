@@ -15,7 +15,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                 try {
                     variables.binder.unmap( "MailService@cbmailservices" );
                     expect( () => {
-                        variables.wirebox.getInstance( "EmailProvider@megaphone" );
+                        variables.wirebox.getInstance( "EmailProvider@megaphone", { "name": "mail", "properties": {} } );
                     } ).toThrow( type = "Megaphone.Provider.MissingDependency" );
                 } finally {
                     variables.binder.setMapping( "MailService@cbmailservices", mailServiceMapping );

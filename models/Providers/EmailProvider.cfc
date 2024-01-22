@@ -12,10 +12,7 @@ component extends="BaseProvider" accessors="true" {
                 message = "You must install the cbmailservices module to use the EmailProvider"
             );
         }
-    }
 
-    public EmailProvider function setProperties( struct properties = {} ) {
-        variables.properties = arguments.properties;
         param variables.properties.mailer = "default";
         if ( !variables.properties.keyExists( "onSuccess" ) ) {
             variables.properties.onSuccess = () => {
@@ -25,7 +22,6 @@ component extends="BaseProvider" accessors="true" {
             variables.properties.onError = () => {
             };
         }
-        return this;
     }
 
     public string function getProviderName() {

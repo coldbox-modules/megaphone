@@ -22,6 +22,9 @@ component {
     this.mappings[ "/app" ] = testsPath & "resources/app";
     this.mappings[ "/coldbox" ] = testsPath & "resources/app/coldbox";
     this.mappings[ "/testbox" ] = rootPath & "/testbox";
+    this.mappings[ "/hyper" ] = rootPath & "/modules/hyper";
+    this.mappings[ "/hyper" ] = testsPath & "resources/app/modules/hyper";
+    this.mappings[ "/globber" ] = testsPath & "resources/app/modules/hyper/modules/globber";
 
     this.datasource = "megaphone";
 

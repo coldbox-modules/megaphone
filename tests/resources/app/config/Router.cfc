@@ -12,7 +12,7 @@ component {
          * --------------------------------------------------------------------------
          * https://coldbox.ortusbooks.com/the-basics/routing/application-router#configuration-methods
          */
-        setFullRewrites( true );
+        setFullRewrites( false );
 
         /**
          * --------------------------------------------------------------------------

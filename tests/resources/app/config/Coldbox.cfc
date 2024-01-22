@@ -12,7 +12,8 @@ component {
                         "provider": "DatabaseProvider@megaphone",
                         "properties": { "tableName": "megaphone_notifications", "datasource": "megaphone" }
                     },
-                    "email": { "provider": "EmailProvider@megaphone", "properties": {} }
+                    "email": { "provider": "EmailProvider@megaphone", "properties": {} },
+                    "slack": { "provider": "SlackProvider@megaphone", "properties": { "token": "fake-token" } }
                 }
             },
             "cbmailservices": { "mailers": { "default": { "class": "InMemory" } } }
@@ -57,7 +58,7 @@ component {
             invalidHTTPMethodHandler: "",
             exceptionHandler: "main.onException",
             invalidEventHandler: "",
-            customErrorTemplate: "",
+            customErrorTemplate: "/coldbox/system/exceptions/Whoops.cfm",
             // Application Aspects
             handlerCaching: false,
             eventCaching: false,

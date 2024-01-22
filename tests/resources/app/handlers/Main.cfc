@@ -6,26 +6,20 @@ component extends="coldbox.system.EventHandler" {
      * Default Action
      */
     function index( event, rc, prc ) {
-        var userA = getInstance( "User" ).setId( 1 );
-        megaphone.notify( userA, "TestNotification", { "message": "Hello, world!" } );
+        event.setView( "main/index" );
     }
 
-    /**
-     * Produce some restfulf data
-     */
-    function data( event, rc, prc ) {
-        return [
-            { "id": createUUID(), "name": "Luis" },
-            { "id": createUUID(), "name": "Joe" },
-            { "id": createUUID(), "name": "Bob" },
-            { "id": createUUID(), "name": "Darth" }
-        ];
-    }
+    function slack( event, rc, prc ) {
+        variables.megaphone.notify(
+            getInstance( "ExplorerNotifiable" ).setSlackChannel( rc.to ).setSlackToken( rc.token ),
+            getInstance( "ExplorerSlackNotification" ).setBlockJSON( deserializeJSON( rc.blockJSON ) )
+        );
 
-    /**
-     * Relocation example
-     */
-    function doSomething( event, rc, prc ) {
+        flash.put(
+            "message",
+            { "title": "Slack Notification sent!", "text": "Check out #rc.to# in Slack", "icon": "success" }
+        );
+
         relocate( "main.index" );
     }
 
