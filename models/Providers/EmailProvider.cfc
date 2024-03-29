@@ -13,7 +13,7 @@ component extends="BaseProvider" accessors="true" {
             );
         }
 
-        param variables.properties.mailer = "default";
+        param variables.properties.mailer = variables.mailService.getDefaultProtocol();
         if ( !variables.properties.keyExists( "onSuccess" ) ) {
             variables.properties.onSuccess = () => {
             };
