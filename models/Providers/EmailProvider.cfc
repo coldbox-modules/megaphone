@@ -1,5 +1,6 @@
 component extends="BaseProvider" accessors="true" {
 
+    property name="log" inject="logbox:logger:{this}";
     property name="wirebox" inject="wirebox";
     property name="mailService";
 
@@ -15,11 +16,23 @@ component extends="BaseProvider" accessors="true" {
 
         param variables.properties.mailer = variables.mailService.getDefaultProtocol();
         if ( !variables.properties.keyExists( "onSuccess" ) ) {
-            variables.properties.onSuccess = () => {
+            variables.properties.onSuccess = ( results, mail ) => {
+                if ( variables.log.canInfo() ) {
+                    variables.log.info(
+                        "Email successfully sent",
+                        { "messages": results.messages, "mail": mail.getMemento() }
+                    );
+                }
             };
         }
         if ( !variables.properties.keyExists( "onError" ) ) {
-            variables.properties.onError = () => {
+            variables.properties.onError = ( results, mail ) => {
+                if ( variables.log.canError() ) {
+                    variables.log.error(
+                        "Error sending email: #arguments.results.messages.toList( "; " )#",
+                        { "messages": results.messages, "mail": mail.getMemento() }
+                    );
+                }
             };
         }
     }
