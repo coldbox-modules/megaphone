@@ -1,3 +1,11 @@
+# v1.0.2
+## 09 Apr 2024 — 18:40:10 UTC
+
+### other
+
++ __\*:__ fix: Ensure optional dependencies are activated when registering channels. (#1) ([7ea64c9](https://github.com/coldbox-modules/megaphone/commit/7ea64c96230e4d07d94abf656940919d8c0a5da9))
+
+
 # v1.0.1
 ## 29 Mar 2024 — 14:58:38 UTC
 
