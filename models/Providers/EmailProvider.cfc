@@ -1,16 +1,25 @@
 component extends="BaseProvider" accessors="true" {
 
+    property name="moduleService" inject="box:moduleService";
     property name="log" inject="logbox:logger:{this}";
     property name="wirebox" inject="wirebox";
     property name="mailService";
 
     function onDIComplete() {
         try {
+            variables.moduleService.activateModule( "cbmailservices" );
             variables.mailService = variables.wirebox.getInstance( "MailService@cbmailservices" );
+        } catch ( IllegalModuleState e ) {
+            throw(
+                type = "Megaphone.Provider.MissingDependency",
+                message = "You must install the cbmailservices module to use the EmailProvider",
+                extendedInfo = serializeJSON( e )
+            );
         } catch ( Injector.InstanceNotFoundException e ) {
             throw(
                 type = "Megaphone.Provider.MissingDependency",
-                message = "You must install the cbmailservices module to use the EmailProvider"
+                message = "You must install the cbmailservices module to use the EmailProvider",
+                extendedInfo = serializeJSON( e )
             );
         }
 

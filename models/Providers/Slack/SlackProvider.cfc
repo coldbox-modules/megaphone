@@ -1,15 +1,24 @@
 component extends="megaphone.models.Providers.BaseProvider" accessors="true" {
 
+    property name="moduleService" inject="box:moduleService";
     property name="wirebox" inject="wirebox";
     property name="client";
 
     function onDIComplete() {
         try {
+            variables.moduleService.activateModule( "hyper" );
             variables.client = variables.wirebox.getInstance( "HyperBuilder@hyper" );
+        } catch ( IllegalModuleState e ) {
+            throw(
+                type = "Megaphone.Provider.MissingDependency",
+                message = "You must install the hyper module to use the SlackProvider",
+                extendedInfo = serializeJSON( e )
+            );
         } catch ( Injector.InstanceNotFoundException e ) {
             throw(
                 type = "Megaphone.Provider.MissingDependency",
-                message = "You must install the hyper module to use the SlackProvider"
+                message = "You must install the hyper module to use the SlackProvider",
+                extendedInfo = serializeJSON( e )
             );
         }
 

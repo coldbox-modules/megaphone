@@ -1,3 +1,19 @@
+# v1.0.1
+## 29 Mar 2024 — 14:58:38 UTC
+
+### chore
+
++ __tests:__ Pin to adobe@2023.0.06 to avoid MySQL driver issues
+ ([c0f3cfc](https://github.com/coldbox-modules/megaphone/commit/c0f3cfc9ec6e54e493644443c06d03f5bcd7819f))
+
+### fix
+
++ __EmailProvider:__ Log to info and error on success and error, respectively
+ ([5b5e0ac](https://github.com/coldbox-modules/megaphone/commit/5b5e0ac44ec899c4c7dcdb29ced737d2b1b508cc))
++ __EmailProvider:__ Use cbmailservices default mailer by default
+ ([f5a6ed9](https://github.com/coldbox-modules/megaphone/commit/f5a6ed9d9b3c24c13a6e9603372768f41ba89206))
+
+
 # v0.1.3
 ## 24 Jan 2024 — 00:01:13 UTC
 
