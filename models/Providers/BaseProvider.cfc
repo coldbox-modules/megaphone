@@ -33,7 +33,9 @@ component accessors="true" {
         boolean optional = false
     ) {
         var methodName = "routeNotificationFor" & arguments.type;
-        if ( !structKeyExists( notifiable, methodName ) && !arguments.optional ) {
+        var methodExists = structKeyExists( notifiable, methodName );
+
+        if ( !methodExists && !arguments.optional ) {
             var routingToMethodName = variables.str.camel( "to_#arguments.type#" );
             var routingForMethodName = variables.str.camel( "route_notification_for_#arguments.type#" );
             throw(
@@ -42,7 +44,9 @@ component accessors="true" {
             );
         }
 
-        return invoke( arguments.notifiable, methodName, arguments.additionalArgs );
+        if ( methodExists ) {
+            return invoke( arguments.notifiable, methodName, arguments.additionalArgs );
+        }
     }
 
 }
