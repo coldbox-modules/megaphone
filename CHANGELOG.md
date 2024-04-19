@@ -1,3 +1,12 @@
+# v1.0.4
+## 19 Apr 2024 — 16:28:17 UTC
+
+### fix
+
++ __SlackProvider:__ Use default route object if none is returned
+ ([979619c](https://github.com/coldbox-modules/megaphone/commit/979619c5545a6778285eec1f7763f43b55f5cf16))
+
+
 # v1.0.3
 ## 18 Apr 2024 — 15:42:53 UTC
 
