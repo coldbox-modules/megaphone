@@ -104,6 +104,10 @@ component extends="megaphone.models.Providers.BaseProvider" accessors="true" {
             optional = true
         );
 
+        if ( isNull( route ) ) {
+            route = newSlackRoute();
+        }
+
         if ( isSimpleValue( route ) ) {
             return newSlackRoute().setChannel( route ).setToken( variables.properties.token );
         }
