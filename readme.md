@@ -408,3 +408,67 @@ moduleSettings = {
 The `mailer` property is the default mailer for this channel. (It does not have to be the `default` mailer in cbMailservices.) If you set the mailer when calling `newMail` in your notification, your custom mailer will override the channel default.
 
 The `onSuccess` and `onError` callbacks are the default callbacks called on the `Mail` object after is has been sent.  By default, these are both no-ops.
+### Delivery backend pagination
+
+`DeliveryStore.getPage(maxRows=50, offset=0, constraints=callback)` returns
+`{ results, hasMore }` without claiming work or invoking providers. It orders by
+updated date descending and delivery ID, clamps the page size to 1–200, and
+uses a one-row lookahead. The callback receives a query using the stable
+`delivery` alias and runs before ordering and pagination; it can add authorized
+filters, domain joins and selected metadata. Returned routing data is decoded.
+This is a trusted backend API: consumers must enforce their operator policy and
+supply the recipient, namespace and domain restrictions their application needs.
+It does not expose an HTTP endpoint or assume application scope names.
+
+### Audited operator recovery
+
+`DeliveryStore.requestRecovery(id, requestKey, actorId, expectedVersion,
+eligibility, queueAdapter, additionalAttempts=1, actorLabel="")` records a recovery
+receipt and queues work in the same transaction. Obtain the version from
+`recoveryVersion(delivery)`; authorize the operator and delivery in application code.
+The eligibility callback must return `{ status: "ready" }` after checking current
+recipient access, preferences and domain state. The queue adapter must participate
+in the same datasource transaction and must not perform external transport.
+
+Only retryable or permanently failed work can recover. Accepted, ambiguous,
+suppressed and processing work cannot. Recovery preserves cumulative attempt and
+transport counts, provider references and future backoff. Each command grants
+1–5 additional transports, with a lifetime limit of 45 additional transports per
+delivery. A repeated request key with identical intent returns its original
+receipt; different intent conflicts. Stale versions and failed eligibility do not
+create a receipt or queue work. Reconcile external acceptance before requesting
+recovery; a permanent state alone is not proof that a legacy provider rejected it.
+
+`recoveryHistory(id, maxRows=20, offset=0)` provides bounded receipt pages with
+operator identity, prior state/counts/evidence and granted allowance. Resolved-event
+retention removes these receipts along with their delivery diagnostics. Migration
+010002 completes the column addition intended by 010000; its down retains the
+column for 010000's removal when rolling back the recovery feature.
+
+Attempt cleanup locks the delivery owner and rechecks that it remains terminal
+before deleting expired diagnostics. Resolved-event cleanup locks the parent event
+and its deliveries in ID order, then rechecks every delivery's terminal state and
+settlement cutoff. Reopening work for recovery protects the event, attempts and
+recovery receipts; settling it again starts a new settlement retention period.
+Consumers must choose an event cutoff beyond their supported replay window before
+invoking resolved-event cleanup. Inbox retention alone does not define that window.
+
+### Delivery reconciliation counts
+
+`DeliveryStore@megaphone.stateCounts(constraints)` returns channel/state/total groups using distinct delivery IDs. The optional trusted backend callback receives the same `delivery` alias as `getPage` and applies application ownership, namespace or migration constraints before aggregation. It supports reconciliation without loading every delivery or coupling applications to module storage queries. These are current durable states, not evidence that a provider delivered or a recipient read a message.
+
+### Bounded event replay admission
+
+`DurableNotificationService.publish(event, intents, queueAdapter, admitAfter)` accepts an optional occurrence cutoff. When supplied, `event.createdDate` must be the persisted domain occurrence time; missing or invalid values raise `Megaphone.Events.OccurrenceRequired`. Occurrences strictly older than the cutoff return `{ event: { id: "", created: false, expired: true }, deliveries: [] }` before any event, delivery, or queue writes. Equality remains admitted. Calls without this option retain their existing behavior.
+
+`canPublish(occurredAt, admitAfter)` exposes the same check for consumers that want to avoid recipient/preference planning for retired events. `publish` repeats the check at its persistence boundary. Expired publication does not delete or cancel existing deliveries; their recovery continues through the delivery owner. Explicit no-send imports and pending-work migration can use their own admission contract.
+
+Choose an event retention cutoff no later than the admission cutoff and retain unresolved work independently. Use immutable domain timestamps on every producer, never a retry's processing time. Do not widen the accepted replay interval after pruning its identities without restoring deduplication evidence. An admission check alone does not enable cleanup or bound unrelated queue/provider bookkeeping.
+
+`pruneResolvedEvents(eventsBefore, deliveriesBefore, limit=100, constraints)` also accepts an optional trusted backend query constraint. It filters candidates before the batch limit and is reapplied to the locked parent lookup before deletion. Consumers can constrain their namespace and preserve events with external queue/import references without putting application tables into Megaphone. The usual terminal-state, settlement cutoff, and parent/child locking checks still apply. External systems must use compatible ownership/locking rules; this callback is not permission to race inserts of references against deletion.
+
+`DeliveryStore.find(id, lockRow=false)` can lock the delivery row for trusted consumer lifecycle work. Use `lockRow=true` only inside the consumer's transaction and keep the transaction open through the external-reference mutation. Recovery, claims, completion, and retention use the same owner lock; a locked lookup does not itself authorize a caller or supply a transaction.
+
+`pruneResolvedEvents` additionally accepts `beforePrune(event, deliveries)`. This trusted backend callback runs after the parent and terminal children are locked and validated, before removal, inside the same transaction. It receives copies of the stored event and delivery rows. Consumers may persist minimal retirement receipts using the same transaction-compatible datasource; a callback exception aborts deletion. Keep external I/O out of the callback. Pending, ambiguous, or otherwise ineligible events never invoke it. Applications remain responsible for protecting their reference lifecycle and reconciling any retained evidence.
+
+For a local unpublished archive using CommandBox's ForgeBox package filtering, run `box task run taskFile=tasks/PrepareLocalArtifact.cfc` from the module root. The task invokes the archive builder only; it never publishes or changes versions. It checks required runtime/migration files, rejects development/dependency/SDK contents and duplicate paths, compares every packaged file with its source, and records a per-file SHA-256/size manifest. It writes `.tmp/megaphone-local-artifact.zip` plus a checksum receipt. This is a source artifact check, not proof of clean installation, released-version adoption, or runtime compatibility.
