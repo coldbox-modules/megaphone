@@ -1,5 +1,9 @@
 component {
 
+    function detectEnvironment() {
+        return "testing";
+    }
+
     /**
      * Configure the ColdBox App For Production
      * https://coldbox.ortusbooks.com/getting-started/configuration
