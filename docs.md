@@ -185,7 +185,9 @@ before saving the JAR under `resources/java/webpush`. If the file already exists
 it checks that file. Add this step to your deployment build if you use push;
 the regular Megaphone install doesn't download the SDK.
 
-Load that directory with your application's Java loader. Pass its `create`
+Load that directory with your application's Java loader. On Adobe 2021 and
+2023, add it to `this.javaSettings.loadPaths` and have your class factory call
+`createObject( "java", className )`. Pass its `create`
 class factory, the SDK's VAPID key pair, a contact subject (`mailto:` or HTTPS),
 and the push-service DNS hosts you trust to `new WebPushTransport(...)`.
 Host entries can be exact names or `*.example.com` patterns. The wildcard matches
@@ -237,7 +239,9 @@ send deliveries.
 ## Durable delivery
 
 Existing synchronous consumers can keep using their current APIs. To use durable
-delivery, apply the delivery and attempt migrations.
+delivery, apply the delivery and attempt migrations, including the delivery
+timestamp precision migration. It keeps MySQL from rounding newly queued work
+into the next second. PostgreSQL already preserves that precision.
 `DurableNotificationService@megaphone.publish(event, intents, queueAdapter)`
 records an event and its recipient/channel/device work in one transaction.
 Each intent supplies `recipientType`, `recipientId`, `channel`, optional

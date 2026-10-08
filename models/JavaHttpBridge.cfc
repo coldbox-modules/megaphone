@@ -94,10 +94,17 @@ component {
         for ( var index = 1; index <= arguments.types.len(); index++ ) {
             arrays.set( parameterTypes, javacast( "int", index - 1 ), classes.forName( arguments.types[ index ] ) );
         }
+        var parameterValues = arrays.newInstance(
+            classes.forName( "java.lang.Object" ),
+            javacast( "int", arguments.values.len() )
+        );
+        for ( var index = 1; index <= arguments.values.len(); index++ ) {
+            arrays.set( parameterValues, javacast( "int", index - 1 ), arguments.values[ index ] );
+        }
         return classes
             .forName( arguments.interfaceName )
             .getMethod( arguments.method, parameterTypes )
-            .invoke( arguments.target, javacast( "object[]", arguments.values ) );
+            .invoke( arguments.target, parameterValues );
     }
 
 }

@@ -100,19 +100,23 @@ component extends="tests.specs.integration.DatabaseInboxSpec" {
                 var first = register( variables.owner, "private" );
                 expect( variables.subscriptions.rename( variables.other, first.id, "Taken" ) ).toBeFalse();
                 expect( variables.subscriptions.disconnect( variables.other, first.id ) ).toBeFalse();
-                expect( () => variables.subscriptions.setExcluded(
-                    variables.other,
-                    "submitted",
-                    first.id,
-                    true
-                ) ).toThrow( type = "Megaphone.Push.UnknownRegistration" );
-                expect( () => variables.subscriptions.register(
-                    notifiable = variables.other,
-                    endpointHash = hash( "foreign", "SHA-256" ),
-                    sealedData = "sealed",
-                    label = "Foreign",
-                    existingId = first.id
-                ) ).toThrow( type = "Megaphone.Push.UnknownRegistration" );
+                expect( function() {
+                    return variables.subscriptions.setExcluded(
+                        variables.other,
+                        "submitted",
+                        first.id,
+                        true
+                    );
+                } ).toThrow( type = "Megaphone.Push.UnknownRegistration" );
+                expect( function() {
+                    return variables.subscriptions.register(
+                        notifiable = variables.other,
+                        endpointHash = hash( "foreign", "SHA-256" ),
+                        sealedData = "sealed",
+                        label = "Foreign",
+                        existingId = first.id
+                    );
+                } ).toThrow( type = "Megaphone.Push.UnknownRegistration" );
             } );
             it( "retires credentials on disconnect and does not serve expired destinations", () => {
                 var first = register( variables.owner, "first" );

@@ -255,15 +255,17 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 expect( enqueue( device = "second" ).id ).notToBe( first.id );
                 expect( enqueue( channel = "email" ).id ).notToBe( first.id );
                 expect( enqueue( recipient = "different" ).id ).notToBe( first.id );
-                expect( () => enqueue( routingHash = "changed" ) ).toThrow(
-                    type = "Megaphone.Delivery.IdentityConflict"
-                );
+                expect( function() {
+                    return enqueue( routingHash = "changed" );
+                } ).toThrow( type = "Megaphone.Delivery.IdentityConflict" );
             } );
             it( "filters operator pages before limiting and returns decoded routing with stable pages", () => {
                 var first = enqueue( recipient = "wanted" );
                 var second = enqueue( recipient = "wanted", channel = "database", initialState = "suppressed" );
                 enqueue( recipient = "foreign" );
-                var filter = ( query ) => query.where( "delivery.recipientId", "wanted" );
+                var filter = function( query ) {
+                    return query.where( "delivery.recipientId", "wanted" );
+                };
                 var one = variables.deliveries.getPage( 1, 0, filter );
                 var two = variables.deliveries.getPage( 1, 1, filter );
                 expect( one.results.len() ).toBe( 1 );
@@ -326,9 +328,9 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 expect( variables.deliveries.claim( ambiguous.id ).status ).toBe( "ambiguous" );
                 expect( variables.deliveries.due().len() ).toBe( 0 );
                 expect( variables.deliveries.attempts( ambiguous.id ).len() ).toBe( 0 );
-                expect( () => variables.deliveries.importDelivery( intent, { state: "accepted", createdDate: now() } ) ).toThrow(
-                    type = "Megaphone.Delivery.InvalidImport"
-                );
+                expect( function() {
+                    return variables.deliveries.importDelivery( intent, { state: "accepted", createdDate: now() } );
+                } ).toThrow( type = "Megaphone.Delivery.InvalidImport" );
             } );
             it( "rolls back work with the originating event transaction", () => {
                 var work = enqueue();
@@ -417,12 +419,16 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 expect( variables.deliveries.find( work.id ).state ).toBe( "accepted" );
                 expect( variables.deliveries.attempts( work.id ).len() ).toBe( 1 );
             } );
-            it( "suppresses before I/O and rejects misleading suppression or acceptance", () => {
+            it( "rejects acceptance before transport starts", () => {
                 var work = enqueue();
                 var started = variables.deliveries.claim( work.id );
-                expect( () => variables.deliveries.complete( id = work.id, token = started.token, outcome = "accepted" ) ).toThrow(
-                    type = "Megaphone.Delivery.TransportNotStarted"
-                );
+                expect( function() {
+                    return variables.deliveries.complete( id = work.id, token = started.token, outcome = "accepted" );
+                } ).toThrow( type = "Megaphone.Delivery.TransportNotStarted" );
+            } );
+            it( "suppresses before I/O and rejects suppression after transport starts", () => {
+                var work = enqueue();
+                var started = variables.deliveries.claim( work.id );
                 expect(
                     variables.deliveries.complete(
                         id = work.id,
@@ -435,9 +441,9 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 var second = enqueue( device = "second" );
                 var next = variables.deliveries.claim( second.id );
                 variables.deliveries.startTransport( second.id, next.token );
-                expect( () => variables.deliveries.complete( id = second.id, token = next.token, outcome = "suppressed" ) ).toThrow(
-                    type = "Megaphone.Delivery.TransportAlreadyStarted"
-                );
+                expect( function() {
+                    return variables.deliveries.complete( id = second.id, token = next.token, outcome = "suppressed" );
+                } ).toThrow( type = "Megaphone.Delivery.TransportAlreadyStarted" );
             } );
             it( "honors retry scheduling and bounds attempts", () => {
                 var work = enqueue( availableDate = variables.clock );

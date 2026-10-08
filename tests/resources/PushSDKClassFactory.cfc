@@ -5,7 +5,10 @@ component {
         return this;
     }
     function create( required string className ) {
-        return createObject( "java", arguments.className, variables.jarPath );
+        if ( structKeyExists( server, "lucee" ) ) {
+            return createObject( "java", arguments.className, variables.jarPath );
+        }
+        return createObject( "java", arguments.className );
     }
 
 }

@@ -42,7 +42,9 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                     eligibility = ( delivery ) => {
                         return { "status": "suppressed", "reason": "access-revoked" };
                     },
-                    sender = ( delivery, ready ) => accepted()
+                    sender = function( delivery, ready ) {
+                        return accepted();
+                    }
                 );
                 expect( result ).toBe( "suppressed" );
                 expect( variables.sends ).toBe( 0 );
@@ -63,7 +65,9 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                             eligibility = ( delivery ) => {
                                 return { "status": "deferred", "reason": "feature-paused", "retryDate": now() };
                             },
-                            sender = ( delivery, ready ) => accepted(),
+                            sender = function( delivery, ready ) {
+                                return accepted();
+                            },
                             maxAttempts = 1
                         )
                     ).toBe( "retryable" );
@@ -94,7 +98,9 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                     eligibility = ( delivery ) => {
                         throw( message = "Preparation failed." );
                     },
-                    sender = ( delivery, ready ) => accepted()
+                    sender = function( delivery, ready ) {
+                        return accepted();
+                    }
                 );
                 expect( result ).toBe( "retryable" );
                 expect( variables.sends ).toBe( 0 );
@@ -108,7 +114,9 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                         variables.deliveries.recoverExpired( clock = dateAdd( "s", 120, now() ) );
                         return { "status": "ready" };
                     },
-                    sender = ( delivery, ready ) => accepted()
+                    sender = function( delivery, ready ) {
+                        return accepted();
+                    }
                 );
                 expect( result ).toBe( "superseded" );
                 expect( variables.sends ).toBe( 0 );
@@ -121,7 +129,9 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
             eligibility = ( delivery ) => {
                 return { "status": "ready" };
             },
-            sender = ( delivery, ready ) => accepted()
+            sender = function( delivery, ready ) {
+                return accepted();
+            }
         );
     }
     private struct function accepted() {

@@ -26,7 +26,7 @@ component accessors="true" {
                 message = "An endpoint hash, sealed subscription, and valid label are required."
             );
         }
-        var endpointHash = lCase( arguments.endpointHash );
+        local.endpointHash = lCase( arguments.endpointHash );
         var candidateId = uuid();
         transaction {
             try {
@@ -43,7 +43,7 @@ component accessors="true" {
                     "renewedDate": now(),
                     "expiresDate": timestamp( arguments.expiresDate ?: javacast( "null", "" ) )
                 } );
-                var existingId = arguments.existingId;
+                local.existingId = arguments.existingId;
                 var rows = newSubscriptionQuery()
                     .where( ( query ) => query.where( "endpointKey", endpointHash ).orWhere( "id", existingId ) )
                     .orderBy( "id" )
@@ -88,7 +88,7 @@ component accessors="true" {
                 if ( endpoint.id != selected.id ) {
                     retire( endpoint.id );
                 }
-                var label = len( trim( arguments.label ) ) ? arguments.label : selected.label;
+                local.label = len( trim( arguments.label ) ) ? arguments.label : selected.label;
                 if ( !len( trim( label ) ) ) {
                     throw(
                         type = "Megaphone.Push.InvalidRegistration",
@@ -121,7 +121,7 @@ component accessors="true" {
     public array function registrations( required any notifiable, boolean activeOnly = true, date clock = now() ) {
         var query = ownedQuery( recipient( arguments.notifiable ) );
         if ( arguments.activeOnly ) {
-            var clock = arguments.clock;
+            local.clock = arguments.clock;
             query
                 .where( "active", booleanBinding( true ) )
                 .where( ( query ) => query.whereNull( "expiresDate" ).orWhere( "expiresDate", ">", clock ) );
@@ -135,7 +135,7 @@ component accessors="true" {
 
     /** Only delivery infrastructure should request encrypted credential material. */
     public any function activeRegistration( required any notifiable, required string id, date clock = now() ) {
-        var clock = arguments.clock;
+        local.clock = arguments.clock;
         var rows = ownedQuery( recipient( arguments.notifiable ) )
             .where( "id", arguments.id )
             .where( "active", booleanBinding( true ) )

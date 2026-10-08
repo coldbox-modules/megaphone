@@ -20,12 +20,17 @@ component extends="BaseProvider" accessors="true" {
     }
 
     public string function getTableName() {
-        return getProperties()?.table ?: "megaphone_notifications";
+        var properties = getProperties();
+        return structKeyExists( properties, "table" ) ? properties.table : "megaphone_notifications";
     }
 
     /** PostgreSQL UUID columns require OTHER unless the JDBC driver uses unspecified strings. */
     public struct function bindIdentifier( required string id ) {
-        return { "value": arguments.id, "cfsqltype": getProperties().idSqlType ?: "varchar" };
+        var properties = getProperties();
+        return {
+            "value": arguments.id,
+            "cfsqltype": structKeyExists( properties, "idSqlType" ) ? properties.idSqlType : "varchar"
+        };
     }
 
     /** Configured by the consumer's database adapter; preserve its full timestamp precision. */
@@ -63,12 +68,16 @@ component extends="BaseProvider" accessors="true" {
 
     /** Opt in only after applying the additional inbox state migration. */
     public boolean function supportsInboxState() {
-        return getProperties().inboxState ?: false;
+        var properties = getProperties();
+        return structKeyExists( properties, "inboxState" ) && properties.inboxState;
     }
 
     public struct function getQueryOptions() {
         var options = {};
-        options.append( getProperties()?.queryOptions ?: {} );
+        var properties = getProperties();
+        if ( structKeyExists( properties, "queryOptions" ) ) {
+            options.append( properties.queryOptions );
+        }
         if ( getProperties().keyExists( "datasource" ) ) {
             options.append( { "datasource": getProperties().datasource } );
         }

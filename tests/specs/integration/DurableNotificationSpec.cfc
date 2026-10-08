@@ -49,9 +49,9 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                 expect( variables.publisher.canPublish( variables.identity.createdDate, cutoff ) ).toBeFalse();
             } );
             it( "requires a persisted occurrence time when admission is bounded", () => {
-                expect( () => variables.publisher.publish( event = variables.identity, intents = [], admitAfter = now() ) ).toThrow(
-                    type = "Megaphone.Events.OccurrenceRequired"
-                );
+                expect( function() {
+                    return variables.publisher.publish( event = variables.identity, intents = [], admitAfter = now() );
+                } ).toThrow( type = "Megaphone.Events.OccurrenceRequired" );
             } );
             it( "persists independent channel choices and queues only fresh enabled work", () => {
                 var adapter = new tests.resources.DurableQueueFixture();
@@ -89,11 +89,13 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
             } );
             it( "rolls back event and work when transactional queue insertion fails", () => {
                 var adapter = new tests.resources.DurableQueueFixture( true );
-                expect( () => variables.publisher.publish(
-                    event = variables.identity,
-                    intents = [ intent( "email", true ) ],
-                    queueAdapter = adapter
-                ) ).toThrow( type = "QueueFixtureUnavailable" );
+                expect( function() {
+                    return variables.publisher.publish(
+                        event = variables.identity,
+                        intents = [ intent( "email", true ) ],
+                        queueAdapter = adapter
+                    );
+                } ).toThrow( type = "QueueFixtureUnavailable" );
                 var attempted = adapter.getDeliveries()[ 1 ];
                 expect( isNull( variables.events.find( attempted.eventId ) ) ).toBeTrue();
                 expect( isNull( variables.deliveries.find( attempted.id ) ) ).toBeTrue();

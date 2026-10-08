@@ -20,7 +20,7 @@ component accessors="true" {
         validateKey( arguments.notificationType, 160 );
         validateKey( arguments.scopeKey, 100 );
         validateKey( arguments.channel, 60 );
-        var choice = lCase( trim( arguments.choice ) );
+        local.choice = lCase( trim( arguments.choice ) );
         if ( !listFind( "inherit,on,off", choice ) ) {
             throw( type = "Megaphone.Preferences.InvalidChoice", message = "Choices must be inherit, on, or off." );
         }
@@ -62,7 +62,7 @@ component accessors="true" {
         validateKey( arguments.notificationType, 160 );
         validateKey( arguments.scopeKey, 100 );
         validateKey( arguments.channel, 60 );
-        var choice = lCase( trim( arguments.choice ) );
+        local.choice = lCase( trim( arguments.choice ) );
         if ( !listFind( "inherit,on,off", choice ) ) {
             throw( type = "Megaphone.Preferences.InvalidChoice", message = "Choices must be inherit, on, or off." );
         }

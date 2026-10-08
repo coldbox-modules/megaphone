@@ -4,7 +4,14 @@ component extends="testbox.system.BaseSpec" {
     function beforeAll() {
         variables.injector = new coldbox.system.ioc.Injector( binder = "tests.resources.InboxTestBinder" );
         var binder = variables.injector.getBinder();
-        variables.grammar = new qb.models.Grammars.PostgresGrammar();
+        variables.isPostgres = structKeyExists( application, "applicationName" ) && application.applicationName == "CommandBox CLI";
+        variables.grammar = variables.isPostgres ? new qb.models.Grammars.PostgresGrammar() : new qb.models.Grammars.MySQLGrammar();
+        variables.databaseProperties = {
+            "inboxState": true,
+            "idSqlType": variables.isPostgres ? "other" : "varchar",
+            "cursorTimestampExpression": variables.isPostgres ? "CAST(""createdDate"" AS TEXT)" : "CAST(`createdDate` AS CHAR)",
+            "cursorTimestampSqlType": variables.isPostgres ? "other" : "timestamp"
+        };
         if ( structKeyExists( application, "applicationName" ) && application.applicationName == "CommandBox CLI" ) {
             variables.grammar.setInterceptorService( application.wirebox.getInstance( "box:interceptorService" ) );
         }
@@ -17,15 +24,7 @@ component extends="testbox.system.BaseSpec" {
             .map( "DatabaseProvider@megaphone" )
             .to( "megaphone.models.Providers.DatabaseProvider" )
             .initArg( name = "name", value = "database" )
-            .initArg(
-                name = "properties",
-                value = {
-                    "inboxState": true,
-                    "idSqlType": "other",
-                    "cursorTimestampExpression": "CAST(""createdDate"" AS TEXT)",
-                    "cursorTimestampSqlType": "other"
-                }
-            );
+            .initArg( name = "properties", value = variables.databaseProperties );
         binder.map( "DatabaseNotificationCursor@megaphone" ).to( "megaphone.models.DatabaseNotificationCursor" );
         binder.map( "DatabaseNotification@megaphone" ).to( "megaphone.models.DatabaseNotification" );
         binder
@@ -35,17 +34,7 @@ component extends="testbox.system.BaseSpec" {
         variables.injector.registerDSL( "megaphone", "megaphone.dsl.MegaphoneDSL" );
         variables.injector
             .getInstance( "NotificationService@megaphone" )
-            .registerChannels( {
-                "database": {
-                    "provider": "DatabaseProvider@megaphone",
-                    "properties": {
-                        "inboxState": true,
-                        "idSqlType": "other",
-                        "cursorTimestampExpression": "CAST(""createdDate"" AS TEXT)",
-                        "cursorTimestampSqlType": "other"
-                    }
-                }
-            } );
+            .registerChannels( { "database": { "provider": "DatabaseProvider@megaphone", "properties": variables.databaseProperties } } );
         variables.inbox = variables.injector.getInstance( "DatabaseNotificationService@megaphone" );
     }
 
@@ -75,7 +64,9 @@ component extends="testbox.system.BaseSpec" {
                 var visible = store( variables.owner, "visible", "one" );
                 store( variables.owner, "hidden", "two" );
                 store( variables.other, "foreign", "one" );
-                var permitted = ( qb ) => qb.where( "groupKey", "one" ).orWhere( "type", "foreign" );
+                var permitted = function( qb ) {
+                    return qb.where( "groupKey", "one" ).orWhere( "type", "foreign" );
+                };
                 var page = variables.inbox.getNotifications(
                     notifiable = variables.owner,
                     maxRows = 1,
@@ -132,13 +123,15 @@ component extends="testbox.system.BaseSpec" {
                 expect( third.results[ 1 ].getId() ).toBe( oldest.getId() );
                 expect( third.hasMore ).toBeFalse();
                 expect( third.nextCursor ).toBe( "" );
-                expect( () => variables.inbox.getNotificationSlice(
-                    notifiable = variables.other,
-                    afterCursor = first.nextCursor
-                ) ).toThrow( "Megaphone.Database.InvalidCursor" );
+                expect( function() {
+                    return variables.inbox.getNotificationSlice(
+                        notifiable = variables.other,
+                        afterCursor = first.nextCursor
+                    );
+                } ).toThrow( "Megaphone.Database.InvalidCursor" );
             } );
 
-            it( "preserves sub-millisecond timestamp boundaries and orders equal dates by ID", () => {
+            it( "preserves stored timestamp boundaries and orders equal dates by ID", () => {
                 var records = [
                     store( variables.owner, "one" ),
                     store( variables.owner, "two" ),
@@ -146,8 +139,14 @@ component extends="testbox.system.BaseSpec" {
                 ];
                 for ( var index = 1; index <= records.len(); index++ ) {
                     queryExecute(
-                        "UPDATE megaphone_notifications SET ""createdDate""=CAST(:stamp AS timestamp) WHERE id=CAST(:id AS uuid)",
-                        { "stamp": "2026-01-01 12:00:00.000" & index, "id": records[ index ].getId() }
+                        variables.isPostgres ? "UPDATE megaphone_notifications SET ""createdDate""=CAST(:stamp AS timestamp) WHERE id=:id" : "UPDATE megaphone_notifications SET `createdDate`=:stamp WHERE id=:id",
+                        {
+                            "stamp": "2026-01-01 12:00:" & ( variables.isPostgres ? "00.000" : "0" ) & index,
+                            "id": {
+                                "value": records[ index ].getId(),
+                                "cfsqltype": variables.databaseProperties.idSqlType
+                            }
+                        }
                     );
                 }
                 var first = variables.inbox.getNotificationSlice( notifiable = variables.owner, maxRows = 1 );
@@ -167,14 +166,19 @@ component extends="testbox.system.BaseSpec" {
                 var tiedDate = now();
                 for ( var record in records ) {
                     queryExecute(
-                        "UPDATE megaphone_notifications SET ""createdDate""=:stamp WHERE id=CAST(:id AS uuid)",
-                        { "stamp": { "value": tiedDate, "cfsqltype": "timestamp" }, "id": record.getId() }
+                        variables.isPostgres ? "UPDATE megaphone_notifications SET ""createdDate""=:stamp WHERE id=:id" : "UPDATE megaphone_notifications SET `createdDate`=:stamp WHERE id=:id",
+                        {
+                            "stamp": { "value": tiedDate, "cfsqltype": "timestamp" },
+                            "id": { "value": record.getId(), "cfsqltype": variables.databaseProperties.idSqlType }
+                        }
                     );
                 }
                 var expected = variables.inbox
                     .getNotifications( variables.owner )
                     .getResults()
-                    .map( ( record ) => record.getId() );
+                    .map( function( record ) {
+                        return record.getId();
+                    } );
                 first = variables.inbox.getNotificationSlice( notifiable = variables.owner, maxRows = 1 );
                 second = variables.inbox.getNotificationSlice(
                     notifiable = variables.owner,
@@ -207,12 +211,14 @@ component extends="testbox.system.BaseSpec" {
                 expect( dateDiff( "s", created, imported.getCreatedDate() ) ).toBe( 0 );
                 expect( dateDiff( "s", read, imported.getReadDate() ) ).toBe( 0 );
                 expect( variables.inbox.getNotifications( variables.owner ).getPagination().totalRecords ).toBe( 1 );
-                expect( () => variables.inbox.importNotification(
-                    notifiable = variables.other,
-                    id = id,
-                    type = "history",
-                    data = {}
-                ) ).toThrow( type = "Megaphone.Database.ImportConflict" );
+                expect( function() {
+                    return variables.inbox.importNotification(
+                        notifiable = variables.other,
+                        id = id,
+                        type = "history",
+                        data = {}
+                    );
+                } ).toThrow( type = "Megaphone.Database.ImportConflict" );
             } );
 
             it( "keeps filtered notification handles current through read and archive transitions", () => {
@@ -279,12 +285,14 @@ component extends="testbox.system.BaseSpec" {
                 var constrained = variables.inbox.getNotification(
                     notifiable = variables.owner,
                     id = notice.getId(),
-                    constraints = ( qb ) => qb.where( "groupKey", "one" )
+                    constraints = function( qb ) {
+                        return qb.where( "groupKey", "one" );
+                    }
                 );
                 // A real scope change invalidates the original object's mutation query.
                 new qb.models.Query.QueryBuilder( grammar = variables.grammar )
                     .from( "megaphone_notifications" )
-                    .where( "id", { "value": notice.getId(), "cfsqltype": "other" } )
+                    .where( "id", { "value": notice.getId(), "cfsqltype": variables.databaseProperties.idSqlType } )
                     .update( { "groupKey": "two" } );
                 constrained.markAsRead();
                 expect( isDate( variables.inbox.getNotification( variables.owner, notice.getId() ).getReadDate() ) ).toBeFalse();

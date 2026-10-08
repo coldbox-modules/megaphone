@@ -502,7 +502,7 @@ component accessors="true" {
             // The consumer validates an authoritative receipt for this immutable delivery identity.
             // This callback must perform local checks only, never provider I/O.
             var receipt = arguments.acceptance( decode( row ) );
-            if ( !isStruct( receipt ) || !isBoolean( receipt.accepted ?: "" ) ) {
+            if ( !isStruct( receipt ) || !structKeyExists( receipt, "accepted" ) || !isBoolean( receipt.accepted ) ) {
                 throw(
                     type = "Megaphone.Delivery.InvalidReceipt",
                     message = "Receipt validation requires an explicit acceptance decision."

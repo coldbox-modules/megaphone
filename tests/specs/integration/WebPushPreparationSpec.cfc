@@ -2,6 +2,11 @@
 component extends="testbox.system.BaseSpec" {
 
     function run() {
+        if ( val( createObject( "java", "java.lang.System" ).getProperty( "java.specification.version" ) ) < 11 ) {
+            xdescribe( "Web Push SDK requires Java 11", () => {
+            } );
+            return;
+        }
         describe( "Real Web Push request preparation", () => {
             beforeEach( () => {
                 variables.factory = new tests.resources.PushSDKClassFactory(
@@ -37,7 +42,13 @@ component extends="testbox.system.BaseSpec" {
                 var point = classes
                     .forName( "java.security.interfaces.ECPublicKey" )
                     .getMethod( "getW", noTypes )
-                    .invoke( receiver, javacast( "object[]", [] ) );
+                    .invoke(
+                        receiver,
+                        createObject( "java", "java.lang.reflect.Array" ).newInstance(
+                            classes.forName( "java.lang.Object" ),
+                            javacast( "int", 0 )
+                        )
+                    );
                 var x = coordinate( point.getAffineX() );
                 var y = coordinate( point.getAffineY() );
                 variables.subscription = {

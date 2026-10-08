@@ -33,14 +33,16 @@ component extends="tests.specs.integration.DatabaseInboxSpec" {
             it( "rejects identity reuse with changed content", () => {
                 var key = createUUID();
                 record( key );
-                expect( () => variables.events.record(
-                    namespace = "test",
-                    eventKey = key,
-                    version = 1,
-                    type = "submitted",
-                    payload = { "message": "Changed" },
-                    payloadHash = "different-hash"
-                ) ).toThrow( type = "Megaphone.Events.IdentityConflict" );
+                expect( function() {
+                    return variables.events.record(
+                        namespace = "test",
+                        eventKey = key,
+                        version = 1,
+                        type = "submitted",
+                        payload = { "message": "Changed" },
+                        payloadHash = "different-hash"
+                    );
+                } ).toThrow( type = "Megaphone.Events.IdentityConflict" );
             } );
             it( "rolls back event identity with the domain transaction", () => {
                 var event = record( createUUID() );
@@ -48,8 +50,12 @@ component extends="tests.specs.integration.DatabaseInboxSpec" {
                 expect( isNull( variables.events.find( event.id ) ) ).toBeTrue();
             } );
             it( "rejects missing identities and invalid versions before storage", () => {
-                expect( () => record( "", 1 ) ).toThrow( type = "Megaphone.Events.InvalidIdentity" );
-                expect( () => record( createUUID(), 0 ) ).toThrow( type = "Megaphone.Events.InvalidIdentity" );
+                expect( function() {
+                    return record( "", 1 );
+                } ).toThrow( type = "Megaphone.Events.InvalidIdentity" );
+                expect( function() {
+                    return record( createUUID(), 0 );
+                } ).toThrow( type = "Megaphone.Events.InvalidIdentity" );
             } );
         } );
     }

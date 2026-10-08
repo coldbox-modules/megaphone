@@ -31,7 +31,9 @@ component extends="tests.specs.integration.DatabaseInboxSpec" {
                 save( "organization:deleted", "email", "on" );
                 save( "organization:live", "email", "off" );
                 save( "account", "email", "on" );
-                var stale = ( query ) => query.where( "scopeKey", "organization:deleted" );
+                var stale = function( query ) {
+                    return query.where( "scopeKey", "organization:deleted" );
+                };
                 expect( variables.preferences.pruneChoices( stale, 1 ) ).toBe( 1 );
                 expect( variables.preferences.pruneChoices( stale, 1 ) ).toBe( 1 );
                 expect( variables.preferences.pruneChoices( stale, 1 ) ).toBe( 0 );
@@ -42,7 +44,9 @@ component extends="tests.specs.integration.DatabaseInboxSpec" {
                 );
                 expect( choices[ 1 ].choices.email ).toBe( "on" );
                 expect( choices[ 2 ].choices.email ).toBe( "off" );
-                expect( () => variables.preferences.pruneChoices( stale, 0 ) ).toThrow( "Megaphone.Preferences.InvalidBatch" );
+                expect( function() {
+                    return variables.preferences.pruneChoices( stale, 0 );
+                } ).toThrow( "Megaphone.Preferences.InvalidBatch" );
             } );
             it( "resolves ordered scopes and exposes effective sources independently per channel", () => {
                 save( "account", "email", "on" );
@@ -130,10 +134,12 @@ component extends="tests.specs.integration.DatabaseInboxSpec" {
                 ).toBeFalse();
             } );
             it( "rejects invalid choices before persistence", () => {
-                expect( () => save( "account", "email", "yes" ) ).toThrow(
-                    type = "Megaphone.Preferences.InvalidChoice"
-                );
-                expect( () => save( "", "email", "on" ) ).toThrow( type = "Megaphone.Preferences.InvalidKey" );
+                expect( function() {
+                    return save( "account", "email", "yes" );
+                } ).toThrow( type = "Megaphone.Preferences.InvalidChoice" );
+                expect( function() {
+                    return save( "", "email", "on" );
+                } ).toThrow( type = "Megaphone.Preferences.InvalidKey" );
                 expect( configuration().effective.email.enabled ).toBeFalse();
             } );
             it( "cleans up only the deleted recipient's choices", () => {
