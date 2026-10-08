@@ -1,20 +1,20 @@
 Installation: `box install megaphone`
 
-## Recipient-owned inbox APIs
+## Notification inboxes
 
-`DatabaseNotificationService@megaphone` supports recipient-owned lookup, unread
-counts, read snapshots, imports, and bounded retention. Existing retrieval
-arguments remain compatible. The `HasDatabaseNotifications` delegate also exposes
-lookup, counts, snapshots, and pruning using its parent as the recipient.
+You can use `DatabaseNotificationService@megaphone` to look up a recipient's
+notifications, count unread items, mark a snapshot as read, import history, and
+clean up old entries. The existing retrieval arguments still work. If you use the
+`HasDatabaseNotifications` delegate, these methods use the parent object as the
+recipient.
 
-Apply the additional inbox-state migration before enabling
-`properties.inboxState = true` on a database channel. It adds nullable
-`archivedDate` and `groupKey` columns and recipient/order/group indexes. Existing
-channels default to the original schema, and ordinary retrieval does not require
-the new columns. Custom table consumers must apply equivalent schema changes to
-their configured `properties.table`. For PostgreSQL UUID notification IDs, set
-`properties.idSqlType = "other"`; the default string binding remains compatible
-with string ID columns.
+To add archive state and grouping, apply the inbox-state migration and set
+`properties.inboxState = true` on your database channel. The migration adds
+nullable `archivedDate` and `groupKey` columns and indexes for recipient, order,
+and group lookups. Existing channels keep using the original schema by default.
+If you use a custom `properties.table`, apply the same changes to that table.
+For PostgreSQL UUID IDs, set `properties.idSqlType = "other"`. The default string
+binding still works for string ID columns.
 
 ```cfc
 var inbox = wirebox.getInstance( "DatabaseNotificationService@megaphone" );
@@ -35,266 +35,285 @@ var ids = inbox.snapshotIds(
 inbox.markSnapshotAsRead( notifiable = currentUser, ids = ids, constraints = visible );
 ```
 
-Visibility constraints are grouped inside recipient ownership and run before
-pagination/counting. Loaded notifications retain their constraint for later
-mutation. `getNotification` returns null for a missing, foreign, or unauthorized
-ID. Applications must supply current authorization constraints; group metadata
-alone does not grant access. `archiveMode` accepts `all` (the compatibility
-default), `active`, or `archived`. Notification `archive()` and `unarchive()`
-preserve read state. Archived entries remain stored and can be restored.
-Read/archive listing filters and page boundaries do not invalidate a loaded
-notification after its state changes; its recipient and visibility constraints
-still guard subsequent mutations and state refreshes. Cursor `configureQuery`
-callbacks constrain both listing and mutation queries by default and must only
-configure the supplied query, without external side effects. Pass
-`constrainMutations=false` only for presentation filters that should not govern
-later mutations; authorization constraints must retain the default.
+The `constraints` callback runs inside the recipient filter, before pagination
+and counting. Loaded notifications keep that constraint for later updates.
+`getNotification` returns null if the ID is missing, belongs to another recipient,
+or fails your constraint. You still need to supply your application's current
+authorization rules; a `groupKey` by itself doesn't grant access.
 
-Bulk read snapshots contain the IDs visible when captured. Recheck authorization
-when applying them; later arrivals are excluded. Repeated reads preserve the
-original read date. Existing cursor-wide mutation APIs remain available for
-existing consumers, but use snapshots when new arrivals must survive a bulk read.
+`archiveMode` accepts `all` (the existing default), `active`, or `archived`.
+Calling `archive()` or `unarchive()` leaves the read date alone. Archived entries
+stay in the database, so you can restore them later. Changing read or archive
+state doesn't invalidate an already loaded notification just because it no
+longer matches the page's display filter. Recipient and visibility checks still
+apply when you update it or refresh its state.
+
+Cursor `configureQuery` callbacks apply to both retrieval and updates by default.
+Use them to configure the supplied query, without calling external services.
+Set `constrainMutations=false` only for display filters that shouldn't limit later
+updates. Keep the default for authorization constraints.
+
+A read snapshot contains the IDs visible when you took it. Check authorization
+again when marking those IDs as read. Notifications that arrive afterward stay
+unread, and marking an item as read again preserves its original read date.
+The existing cursor-wide methods are still available; use snapshots when you
+want to leave new arrivals alone.
+
+### Importing existing notifications
 
 `importNotification(notifiable, id, type, data, createdDate, readDate, channelName,
-groupKey, archivedDate)` stores history without routing any external channel.
-It preserves a preexisting row on repeat, and rejects an ID owned by another
-recipient or type. Applications must verify their source-to-ID mapping and payload
-consistency before import, and call it in their import transaction.
+groupKey, archivedDate)` saves history without sending anything. Running it again
+leaves the existing row alone. An ID belonging to another recipient or type is
+rejected. Check your source IDs and payloads before importing, and call this
+method inside your import transaction.
 
 `PreferenceStore.importChoice(notifiable, notificationType, scopeKey, channel,
-choice)` inserts a missing explicit preference without replacing an existing
-choice, including under concurrent inserts. Inherit creates no row. Migration
-callers must retain their own import receipt so a later user choice of Inherit
-is not recreated by rerunning a backfill. This API does not dispatch deliveries.
+choice)` adds a missing explicit choice without replacing one that's already
+there, even when two imports run at once. `inherit` creates no row. Keep a record
+of which choices you've imported so rerunning a backfill doesn't recreate a
+choice the user has since changed to Inherit. Importing choices sends nothing.
 
-`DeliveryStore.importDelivery(intent, history)` imports durable delivery state
-without routing or provider I/O. Intent uses enqueue's identity/routing fields;
-history supplies state, attemptCount, createdDate, optional settledDate, reason
-and providerReference. Accepted imports require a bounded positive-evidence
-reference. Ambiguous imports remain outside automatic due work. Existing
-identities retain their current state on rerun; attempts are not fabricated.
-Consumers must validate source evidence, stop the competing owner and retain
-source attempt/audit references. Importing queued work makes it eligible for
-recovery after commit, so it must occur within the coordinated cutover boundary.
+`DeliveryStore.importDelivery(intent, history)` imports delivery state without
+calling a provider. `intent` uses the same identity and routing fields as
+`enqueue`; `history` supplies state, attemptCount, createdDate, and optional
+settledDate, reason, and providerReference. To import accepted work, supply a
+bounded reference to evidence that it was accepted. Ambiguous work stays out of
+automatic retries. Repeated imports preserve the current state and don't invent
+attempts.
+
+Before importing deliveries, verify the source evidence, stop the old delivery
+owner, and keep its attempt and audit references. Queued work becomes eligible
+for recovery after commit, so coordinate that import with the handoff to your
+new worker.
+
 `pruneNotifications(notifiable, keep=1000, batchSize=200, channelName="database")`
-removes at most one batch of the oldest entries beyond the cap, including archives.
-Repeat scheduled calls until the excess is cleared. This API does not prune
-domain history, delivery attempts, or deduplication records.
+removes one batch of the oldest entries above the cap, including archived entries.
+Call it on a schedule until the excess is gone. It only removes inbox entries;
+domain history, delivery attempts, and event identities have their own retention.
 
-## Preference resolution
+## Notification preferences
 
-`PreferenceResolver@megaphone.resolve(defaults, scopes)` accepts channel boolean
-defaults and ordered scopes from least to most specific. Each scope has a `key`
-and `choices` mapping channels to `inherit`, `on`, or `off`. It returns each
-channel's effective `enabled` flag and `source` key without changing input.
-Scope names and authorization belong to the application. Optional persistence
-is provided by `PreferenceStore@megaphone` after applying its migration.
+`PreferenceResolver@megaphone.resolve(defaults, scopes)` takes channel defaults
+and scopes ordered from least to most specific. Each scope has a `key` and a
+`choices` struct with `inherit`, `on`, or `off` for each channel. The result gives
+you the effective `enabled` value and the `source` key for each channel. Your
+inputs aren't changed. You choose the scope names and check access to them.
+If you want to store those choices, apply the preference migration and use
+`PreferenceStore@megaphone`.
 
-`selectDevices(devices, excludedIds)` selects active registrations by stable ID,
-removes duplicates and exclusions, and includes future registrations naturally.
-Device enrollment, persistence, and delivery are separate from this pure resolver.
+`selectDevices(devices, excludedIds)` picks active registrations by stable ID and
+removes duplicates and excluded devices. New registrations are included unless
+excluded. Enrollment, storage, and sending happen outside this resolver.
 
 `PreferenceStore.saveChoice(notifiable, notificationType, scopeKey, channel,
-choice)` stores `on`/`off` or removes the exact owned choice for `inherit`.
-`choices(notifiable, notificationType, scopeKeys)` returns the requested scopes in
-the supplied order, including empty choices for inherited scopes.
+choice)` saves `on` or `off`; `inherit` removes that recipient's exact choice.
+`choices(notifiable, notificationType, scopeKeys)` returns scopes in the order
+you supplied, including empty choices for inherited scopes.
 `configuration(notifiable, notificationType, defaults, scopeKeys)` returns both
-the scopes and resolved effective values. The application must authorize catalog
-types and scope keys before calling these APIs; arbitrary scope strings grant no
-access. `deleteRecipient(notifiable)` removes only that recipient's choices.
+the scopes and the resolved values. Check that the caller can use the requested
+notification types and scopes before calling these methods. A scope string
+isn't an authorization check. `deleteRecipient(notifiable)` removes only that
+recipient's choices.
 
-`PreferenceStore.pruneChoices(constraints, limit=100)` removes a bounded batch
-of stale choices across recipients. Supply a trusted QueryBuilder constraint
-callback identifying obsolete scopes; the module does not know which application
-resources exist. Candidates use deterministic composite-key ordering and are
-rechecked under row locks before deletion. Limits must be integers from 1 to
-1,000. Preserve live and account defaults in the callback. This maintenance API
-must not be exposed as a user-authorized arbitrary query or scope deletion.
+`PreferenceStore.pruneChoices(constraints, limit=100)` removes a batch of stale
+choices across recipients. Supply a backend QueryBuilder callback that selects
+obsolete scopes and keeps live scopes and account defaults. Megaphone doesn't
+know which application resources still exist. Candidates use a deterministic
+composite-key order and are checked again under row locks before deletion.
+`limit` must be an integer from 1 to 1,000. Keep this as a maintenance operation;
+don't let a user supply an arbitrary query or scope deletion.
 
-## Owned push registrations
+## Push registrations
 
 Apply the subscriptions and device-exclusions migrations before using
 `SubscriptionStore@megaphone`. `register(notifiable, endpointHash, sealedData,
-label, existingId, expiresDate)` requires a SHA-256 endpoint hash and encrypted
-material. Use `existingId` only for an owned registration renewal; it preserves
-device exclusions. A subscription moving to another account retires its old
-registration, scrubs its encrypted material, and creates a separate owned ID.
+label, existingId, expiresDate)` takes a SHA-256 endpoint hash and encrypted
+subscription data. Pass `existingId` when renewing that recipient's registration
+to preserve its device exclusions. When a subscription moves to another account,
+the old registration is retired, its encrypted data is cleared, and the new
+account gets a separate registration ID.
 
-`registrations(notifiable, activeOnly=true, clock=now())` returns safe device metadata without
-endpoints, hashes, or encrypted keys. Internal dispatch uses
-`activeRegistration(notifiable, id, clock)` to retrieve an active, unexpired
-registration; keep this result out of client responses and logs. Owned `rename`
-and `disconnect` return false for a missing or foreign ID.
-`setExcluded(notifiable, notificationType, deviceId, excluded)` and
-`excludedIds(notifiable, notificationType)` maintain per-type exclusions.
+`registrations(notifiable, activeOnly=true, clock=now())` returns device metadata
+without endpoints, hashes, or encrypted keys. Use
+`activeRegistration(notifiable, id, clock)` internally when sending to an active,
+unexpired registration. Keep that result out of client responses and logs.
+`rename` and `disconnect` return false for a missing ID or another recipient's ID.
+Use `setExcluded(notifiable, notificationType, deviceId, excluded)` and
+`excludedIds(notifiable, notificationType)` for per-type device exclusions.
 `pruneInactive(beforeDate, limit=100)` removes retired registrations and their
-exclusions in bounded batches. `deleteRecipient` removes that owner's records.
-Disconnect registrations on logout and account switching; the store does not
-observe application authentication events automatically.
+exclusions in batches. `deleteRecipient` removes that recipient's records.
 
-The active-only list excludes expired subscriptions using the same clock boundary as dispatch. Use `activeOnly=false` to include expired and disconnected registrations in a device-management screen; the stored active flag alone does not prove a subscription is unexpired.
+Disconnect registrations when the user logs out or switches accounts. You'll
+need to wire this into your app; Megaphone doesn't listen to authentication
+events automatically.
 
-`SubscriptionCipher(activeKeyId, keys)` seals JSON subscription material with
-AES-256-GCM. Each configured key is a base64-encoded 32-byte storage key. Supply
-the same nonempty recipient-and-origin context to `seal(subscription, context)`
-and `unseal(sealedData, context)`. Retain old key IDs while their records exist;
-new writes use the active key. Storage encryption keys are separate from VAPID
-keys. Validation of browser subscription fields remains the enrollment
-boundary's responsibility.
+The active list excludes expired subscriptions using the same clock as dispatch.
+Pass `activeOnly=false` to show expired and disconnected registrations on a
+device-management screen. A stored active flag doesn't override an expiry date.
+
+`SubscriptionCipher(activeKeyId, keys)` encrypts JSON subscription data with
+AES-256-GCM. Each key is a base64-encoded 32-byte storage key. Pass the same
+nonempty recipient-and-origin context to `seal(subscription, context)` and
+`unseal(sealedData, context)`. Keep old key IDs while records still use them;
+new writes use the active key. These storage keys are separate from your VAPID
+keys. Validate the browser's subscription fields in your enrollment endpoint.
 
 `WebPushResponsePolicy.classify(statusCode, retryAfter="", clock=now())` returns
-dispatch outcomes with safe reason codes and `retireSubscription`. HTTP 201/202
-indicate service acceptance, not user delivery. HTTP 404/410 retire the target;
-429 and server errors are retryable with bounded retry dates. Timeouts,
-redirects, and unexpected success codes remain ambiguous. The policy never
-retains response bodies or endpoint URLs. A transport exception after sending
-must remain ambiguous through `DeliveryDispatcher`; this classifier applies
-only when a completed HTTP response is available.
+a delivery outcome, a safe reason code, and `retireSubscription`. A 201 or 202
+means the push service accepted the request; it doesn't tell you whether the
+user received it. A 404 or 410 retires the registration. A 429 or server error
+can be retried with a bounded retry date. Timeouts, redirects, and unexpected
+success codes leave acceptance ambiguous. Response bodies and endpoint URLs
+aren't retained.
+
+Use the classifier when you have a completed HTTP response. If transport throws
+after sending, keep that result ambiguous through `DeliveryDispatcher`.
 
 ## Optional Java Web Push transport
 
-`WebPushTransport` requires Java 11+ and the optional
+`WebPushTransport` uses Java 11+ and the optional
 [zerodep-web-push-java SDK](https://github.com/st-user/zerodep-web-push-java).
-Install the pinned SDK explicitly from the module directory:
+Run this from the installed module directory:
 
 ```sh
 box task run taskFile=tasks/InstallWebPushSDK.cfc
 ```
 
-The task downloads version 2.1.5 from Maven Central and verifies SHA-256
+The task downloads version 2.1.5 from Maven Central and checks SHA-256
 `1337acba24004f2a702275b676eb3862e402c8775d3031b26464f0b18d3ba989`
-before writing the JAR under `resources/java/webpush`. Repeated runs verify the
-installed file. Include this optional installation in the deployment build when
-push is enabled. Normal Megaphone installation does not download the SDK.
+before saving the JAR under `resources/java/webpush`. If the file already exists,
+it checks that file. Add this step to your deployment build if you use push;
+the regular Megaphone install doesn't download the SDK.
 
-Load that directory with the consumer's Java loader and supply its `create`
+Load that directory with your application's Java loader. Pass its `create`
 class factory, the SDK's VAPID key pair, a contact subject (`mailto:` or HTTPS),
-and explicitly trusted push-service DNS hosts to `new WebPushTransport(...)`.
-Trusted hosts allow exact names or `*.example.com` subdomain patterns; the latter
-does not include the parent domain. Do not derive this allowlist from browser
-input. The default client disables redirects and uses bounded connect/request
-timeouts. An optional `httpClient` constructor argument supports a configured
-consumer transport or a provider fixture; that client must preserve the same
-redirect, timeout, and no-automatic-retry guarantees.
+and the push-service DNS hosts you trust to `new WebPushTransport(...)`.
+Host entries can be exact names or `*.example.com` patterns. The wildcard matches
+subdomains, not the parent domain. Configure these hosts in your app; don't take
+the list from browser input.
 
-`prepare(subscription, payload, ttlSeconds=3600)` performs no external I/O. It
-validates HTTPS endpoints, keys and single-record UTF-8 payload size, then uses
-the SDK for VAPID signing and `aes128gcm` encryption. TTL accepts zero through
-seven days. Build this request during eligibility preparation, before marking
-transport started; recheck the registration and notification authorization in
-the application callback. Keep the request internal because its URI and headers
-contain private subscription and authorization material.
+The default client disables redirects and sets connect and request timeouts.
+You can pass an `httpClient` to use your own transport or a test fixture. It must
+keep those timeout and redirect rules and must not retry automatically.
 
-After the durable dispatcher's transport-start marker,
-`sendPrepared(request)` sends once and discards the response body. It returns
-`WebPushResponsePolicy` outcomes or ambiguous acceptance for transport errors.
-The application retires an owned registration when `retireSubscription=true`;
-failure or expiry of one registration must not cancel another device's work.
-This transport does not create inbox entries or change preferences.
+`prepare(subscription, payload, ttlSeconds=3600)` validates the HTTPS endpoint,
+keys, and single-record UTF-8 payload size, then signs with VAPID and encrypts
+with `aes128gcm`. It doesn't make a network request. TTL can be zero through seven
+days. Prepare the request in your eligibility callback, before marking transport
+as started, and recheck registration ownership and notification access there.
+Keep the prepared request internal; its URI and headers contain private data.
 
-The optional `tests.specs.integration.WebPushPreparationSpec` bundle verifies
-actual SDK request preparation and provider-boundary fixtures after installing
-the SDK. It sends nothing to real devices. Real push providers, service workers,
-permission/enrollment UX, and device delivery need separate acceptance evidence.
+After the dispatcher marks transport as started, `sendPrepared(request)` sends
+once and discards the response body. It returns a `WebPushResponsePolicy` outcome,
+or ambiguous acceptance if transport fails. When `retireSubscription=true`,
+retire that recipient's registration. One failed or expired device shouldn't
+cancel another device's delivery. Sending push doesn't create inbox entries or
+change preferences.
 
-## Durable event identities
+After installing the SDK, you can run
+`tests.specs.integration.WebPushPreparationSpec` to check SDK request preparation
+and transport fixtures. It doesn't send to real devices. Test your actual push
+providers, service worker, enrollment flow, and devices separately.
 
-Apply the independent `megaphone_events` migration to use `EventStore@megaphone`.
+## Event identities
+
+Apply the `megaphone_events` migration to use `EventStore@megaphone`.
 `record(namespace, eventKey, version, type, payload, payloadHash, createdDate)`
-stores an immutable content snapshot and returns the existing event on replay.
-The application supplies a stable hash of its canonical domain payload. Reusing
-an identity with another type or hash raises `Megaphone.Events.IdentityConflict`.
-The unique database constraint protects concurrent attempts. Record events in the
-same datasource and transaction as the domain change; this API does not start an
-independent transaction or call external providers. Optional constructor
-`properties.table` and `properties.queryOptions` configure storage.
+stores an immutable payload snapshot. Repeating the call returns the existing
+event. Supply a stable hash of your canonical domain payload. Reusing the identity
+with a different type or hash throws `Megaphone.Events.IdentityConflict`.
+A unique database constraint handles concurrent calls.
 
-Event identity is separate from recipient inbox rows, so inbox pruning cannot
-make an event new again. `find(id)` returns the snapshot or null. Applications
-must retain identities for their replay window; the event store is not a user
-inbox and does not grant access to notification content. Delivery/outbox routing
-is a separate capability and is not implicitly performed by `record`.
+Record events in the same datasource and transaction as your domain change.
+`record` doesn't start its own transaction or call a provider. You can configure
+storage with constructor `properties.table` and `properties.queryOptions`.
 
-## Durable delivery and dispatch
+Event identities are separate from inbox entries. Pruning someone's inbox won't
+make an old event new again. `find(id)` returns the snapshot or null. Keep event
+identities for your supported replay window. Check access before showing their
+content; the event store isn't a user inbox. Recording an event doesn't queue or
+send deliveries.
 
-The delivery and attempt migrations are optional for existing synchronous
-consumers. `DurableNotificationService@megaphone.publish(event, intents,
-queueAdapter)` records a domain event and its recipient/channel/device work in
-one transaction. An intent supplies `recipientType`, `recipientId`, `channel`,
-optional `deviceId`, explicit `enabled`, `routingData`, `routingHash`, and optional
-`availableDate`. Disabled channels are stored as suppressed; enabling them later
-does not revive that work. A repeated event returns its existing work without
-adding newly eligible recipients or channels.
+## Durable delivery
 
-An optional queue adapter implements `enqueue(delivery)` and must persist a
-reference job in the same datasource and transaction. It must not call an
-external provider. Queue insertion failures roll back publication, even when the
-caller catches the error within its domain transaction. Without an adapter, the
-durable rows remain available through `DeliveryStore.due(limit, clock)` for a
-bounded scheduler. Duplicate queue jobs are safe because claiming is fenced.
+Existing synchronous consumers can keep using their current APIs. To use durable
+delivery, apply the delivery and attempt migrations.
+`DurableNotificationService@megaphone.publish(event, intents, queueAdapter)`
+records an event and its recipient/channel/device work in one transaction.
+Each intent supplies `recipientType`, `recipientId`, `channel`, optional
+`deviceId`, explicit `enabled`, `routingData`, `routingHash`, and optional
+`availableDate`. Disabled channels are saved as suppressed. Enabling one later
+doesn't revive old work. Publishing the same event again returns the existing
+work without adding recipients or channels that became eligible afterward.
 
-`due(limit=100, clock=now(), constraints)` accepts an optional trusted query
-callback applied before ordering and the batch limit. Queue adapters can exclude
-deliveries with an existing live queue reference so those jobs do not repeatedly
-occupy a recovery batch and starve missing jobs. Keep that queue-specific query in
-the adapter, and recheck under the adapter's concurrency guard before enqueueing;
-the candidate query alone does not prevent concurrent schedulers.
+Your optional queue adapter implements `enqueue(delivery)`. Save a job reference
+in the same datasource and transaction, without sending to a provider. A queue
+insertion failure rolls back publication, even if the caller catches it inside
+the domain transaction. Without an adapter, use `DeliveryStore.due(limit, clock)`
+from a scheduler. Duplicate jobs are safe because only the current claim token
+can start transport.
 
-`DeliveryStore@megaphone` offers `enqueue`, `find`, `forEvent`, `claim`,
-`startTransport`, `complete`, `due`, `attempts`, and `recoverExpired`. Its optional
-constructor properties configure `table`, `attemptsTable`, `eventsTable`, and
-`queryOptions`. Event/delivery stores and the queue must use the domain
-transaction's datasource. Queue jobs carry delivery IDs, not serialized user
-objects or credentials.
+`due(limit=100, clock=now(), constraints)` takes an optional backend query callback
+before ordering and limiting the batch. Use it to exclude deliveries that already
+have live queue jobs so they don't crowd out missing jobs. Keep queue-specific
+queries in your adapter and recheck under its concurrency guard before enqueueing.
+Selecting candidates alone doesn't prevent two schedulers from acting on them.
+
+`DeliveryStore@megaphone` provides `enqueue`, `find`, `forEvent`, `claim`,
+`startTransport`, `complete`, `due`, `attempts`, and `recoverExpired`.
+Constructor properties let you set `table`, `attemptsTable`, `eventsTable`, and
+`queryOptions`. Use the domain transaction's datasource for events, deliveries,
+and queue jobs. Queue delivery IDs rather than serialized users or credentials.
 
 `DeliveryDispatcher@megaphone.dispatch(id, eligibility, sender, leaseSeconds=60,
-maxAttempts=5, retrySeconds=30)` claims work and runs application callbacks:
+maxAttempts=5, retrySeconds=30)` claims work and calls your callbacks:
 
-- `eligibility(delivery)` prepares content and rechecks current access,
-  preferences, subscription ownership, feature availability, and source revision
-  immediately before transport. It returns `status` as `ready`, `suppressed`,
-  `deferred`, or `permanent`, plus optional safe reason/retry date and prepared
-  content. The module does not assume an application's authorization model.
-- `sender(delivery, prepared)` sends using the configured channel adapter and
-  returns `outcome` as `accepted`, `retryable`, `permanent`, or `ambiguous`, plus
-  optional provider reference, safe reason, and retry date. `retryable` requires
-  evidence of rejection before acceptance; an uncertain timeout is ambiguous.
+- `eligibility(delivery)` prepares content and checks current access, preferences,
+  registration ownership, feature availability, and source revision just before
+  transport. Return `status` as `ready`, `suppressed`, `deferred`, or `permanent`,
+  with optional safe reason, retry date, and prepared content. You supply the
+  application's authorization rules.
+- `sender(delivery, prepared)` sends through your channel adapter. Return `outcome`
+  as `accepted`, `retryable`, `permanent`, or `ambiguous`, with optional provider
+  reference, safe reason, and retry date. Use `retryable` only when you know the
+  provider rejected the request before acceptance. An uncertain timeout is
+  `ambiguous`.
 
-The transport marker must succeed before I/O. Lease expiry before that marker
-permits retry with a new token; the previous worker cannot start transport.
-Expiry or an exception after the marker leaves acceptance ambiguous and blocks
-automatic resends. A late result from the same ambiguous lease can still record
-acceptance. Reconciliation must establish a definitive outcome before retrying;
-provider acceptance never implies user receipt or read state. Pre-transport
-feature pauses/preparation failures do not consume the actual transport limit.
-`attemptCount` counts claims, while `transportCount` counts transport starts.
+The transport-start marker must succeed before sending. If a lease expires before
+that point, a new worker can retry and the old token can no longer start transport.
+If it expires or throws afterward, acceptance is ambiguous and automatic resends
+stop. A late result from that same lease can still record acceptance. Establish a
+definite outcome before retrying. Provider acceptance doesn't mean the recipient
+received or read the message.
 
-`recoverExpired(limit=100, clock)` reclassifies expired processing rows in bounded
-batches. Run it alongside the due-work scheduler so a lost queue job cannot
-strand work. Sender callbacks must not start a new domain transaction around
-network I/O; claim/policy state is committed before invoking the provider.
+Feature pauses and preparation failures before transport don't use up the actual
+send allowance. `attemptCount` counts claims; `transportCount` counts starts.
+`recoverExpired(limit=100, clock)` checks expired processing rows in batches.
+Run it alongside your due-work scheduler so lost jobs don't leave work stranded.
+Claim and policy state is committed before calling the provider. Don't wrap
+network I/O in a new domain transaction in your sender callback.
 
-`reconcileAccepted(id, acceptance, clock=now())` settles a delivery from a verified
-receipt, including late acceptance or acceptance imported from a former delivery
-owner. The local, no-I/O callback receives the immutable delivery and returns
-`{ accepted: false }` or `{ accepted: true, providerReference: "receipt-id" }`.
-The consumer must verify the receipt belongs to that delivery before returning
-true. Confirmed acceptance fences queued/running work without another send;
-existing attempt outcomes are retained rather than attributed to a newer attempt.
-This backend API is not an unauthenticated receipt endpoint.
+`reconcileAccepted(id, acceptance, clock=now())` settles work using a verified
+receipt, including late acceptance or an import from the previous delivery owner.
+The callback receives the immutable delivery and returns `{ accepted: false }`
+or `{ accepted: true, providerReference: "receipt-id" }`. Verify that the receipt
+belongs to that delivery. Keep the callback local, without external I/O.
+Confirmed acceptance prevents queued or running work from sending again.
+Existing attempt outcomes stay attached to their original attempts. Authorize
+this operation in your app before exposing it through an endpoint.
 
-`pruneAttempts(beforeDate, limit=200)` deletes diagnostics only for terminal
-deliveries and retains the durable provider reference. `pruneResolvedEvents(
-eventsBefore, deliveriesBefore, limit=100)` deletes event identities and their
-work only when the event is beyond the application's replay window and every
-delivery is terminal and old enough. Pending or ambiguous work and its evidence
-are protected. Applications must enforce their replay window before publishing
-old domain events; use `importNotification` for history instead of publication.
-Neither cleanup API deletes user inbox rows or domain audit history.
+`pruneAttempts(beforeDate, limit=200)` removes diagnostics for terminal deliveries
+and keeps the provider reference. `pruneResolvedEvents(eventsBefore,
+deliveriesBefore, limit=100)` removes event identities and their work only after
+the replay window, when every delivery is terminal and old enough. Pending or
+ambiguous work keeps its evidence. Reject old events outside your replay window
+before publishing; use `importNotification` when you only need to import history.
+Neither cleanup method removes inbox entries or domain audit history.
 
-Use scheduled, configurable cutoffs, for example 90 days for terminal attempt
-diagnostics and 365 days for resolved event identities, with the latter strictly
-beyond the allowed domain-event replay period. The inbox's count cap is separate.
+Set your cutoffs in scheduled configuration. For example, you might keep terminal
+attempt diagnostics for 90 days and resolved event identities for 365 days.
+The event cutoff must be beyond your supported replay window. The inbox count
+cap is a separate setting.
 
 Config:
 ```cfc
@@ -610,8 +629,30 @@ cursor.deleteAll(); // deletes all, not just current page
 
 ### Keyset inbox pages
 
-`DatabaseNotificationService.getNotificationSlice()` returns `{ results, nextCursor, hasMore }`. Pass `nextCursor` as `afterCursor` for the next page. Ordering is newest `createdDate`, then descending ID. Inserts ahead of the boundary do not repeat entries, and deleting the boundary row does not invalidate continuation. The cursor is recipient-bound, but is not an authorization credential: current recipient ownership, visibility constraints, archive mode, and unread filters are applied to every page. Reset the cursor when filters change. A fresh first page includes new arrivals.
+`DatabaseNotificationService.getNotificationSlice()` returns
+`{ results, nextCursor, hasMore }`. Pass `nextCursor` as `afterCursor` to get the
+next page. Results are ordered by newest `createdDate`, then descending ID.
+New entries ahead of that position won't repeat items, and deleting the boundary
+row won't break the next page.
 
-This optional API requires the database provider's trusted `cursorTimestampExpression` configuration to return timestamp text in `yyyy-MM-dd HH:mm:ss[.fraction]` form without losing database precision. Set `cursorTimestampSqlType` to the JDBC binding type your adapter needs. For PostgreSQL, configure `cursorTimestampExpression = 'CAST("createdDate" AS TEXT)'` and `cursorTimestampSqlType = "other"`; UUID IDs also use `idSqlType = "other"`. Expressions are application configuration, never caller input. Existing offset pagination APIs remain unchanged and do not require this configuration.
+The cursor belongs to a recipient, but you'll still need to check access.
+Recipient ownership, visibility constraints, archive mode, and unread filters
+apply on every page. Reset the cursor when filters change. Start a fresh first
+page to include new arrivals.
 
-Invalid or foreign-recipient cursors throw `Megaphone.Database.InvalidCursor`. Configure `cursorIdentifierPattern` when the database has a constrained ID type, such as a UUID column, so malformed cursor identifiers are rejected before JDBC conversion. Views may retain previous-page cursor boundaries for back navigation, but each request rechecks access. A cursor is a position, not a frozen copy of permission or read/archive state. Pruned entries disappear; they do not shift a numeric offset. Pending delivery and deduplication records remain independent of inbox pagination and retention.
+Configure the database provider's `cursorTimestampExpression` to return timestamp
+text as `yyyy-MM-dd HH:mm:ss[.fraction]` without losing database precision.
+Set `cursorTimestampSqlType` to the JDBC binding type your adapter needs.
+For PostgreSQL, use `cursorTimestampExpression = 'CAST("createdDate" AS TEXT)'`
+and `cursorTimestampSqlType = "other"`. UUID IDs also need `idSqlType = "other"`.
+Keep these expressions in application configuration, never caller input.
+The existing offset pagination methods don't need these settings.
+
+An invalid cursor or one from another recipient throws
+`Megaphone.Database.InvalidCursor`. Set `cursorIdentifierPattern` for constrained
+IDs, such as UUID columns, to reject malformed IDs before JDBC conversion.
+You can keep previous cursor positions for back navigation, but each request
+checks access again. A cursor keeps your place; it doesn't freeze permissions,
+read state, or archive state. Pruned entries disappear without shifting a numeric
+offset. Inbox pagination and retention leave pending deliveries and event
+identities alone.

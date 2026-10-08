@@ -1,22 +1,24 @@
-# v1.1.0 (pending stable release)
+# v1.1.0 (pending release)
 
-## Notification backend expansion
+## Added
 
-- Recipient-owned Notification Center APIs: authorized queries/counts, stable cursors, read snapshots, archive state, no-send history imports, and bounded retention.
-- Ordered recipient preference scopes with independent channels and per-type device exclusions.
-- Durable event/delivery storage with transactional enqueueing, leases, transport fencing, retries, ambiguous acceptance, and audited operator recovery.
-- Owned encrypted web-push subscriptions, renewal/disconnection, per-device delivery, response classification, and optional SDK installation.
-- Replay admission using persisted occurrence timestamps; safe terminal diagnostic cleanup with trusted query constraints and atomic retirement callbacks.
+- Notification inbox APIs with recipient access checks, stable cursors, read snapshots, archive state, history imports, and retention.
+- Preferences by scope and channel, including device exclusions for each notification type.
+- Durable events and deliveries with transactional queue jobs, claim tokens, retries, acceptance tracking, and operator recovery history.
+- Encrypted push subscriptions, renewal and disconnect support, per-device delivery, response handling, and an optional SDK installer.
+- Event replay cutoffs and cleanup callbacks for keeping external references and retirement receipts.
 
-## Upgrade requirements
+## Upgrading
 
-Existing direct notification/provider APIs remain available. New persistence capabilities require explicitly applying the ordered module migrations to the consumer's transaction-compatible datasource. Configure the queue adapter, preference scopes, visibility/eligibility callbacks, retention/replay policy, and worker recovery when adopting durable delivery. Web push additionally requires subscription encryption configuration, push credentials, the optional SDK, and browser/service-worker integration supplied by the consumer.
+Your existing notification and provider APIs still work. To use the new storage features, apply the module migrations in order to the same datasource as your application transaction. You'll need to configure your queue adapter, preference scopes, access and eligibility callbacks, retention and replay settings, and worker recovery. For web push, add subscription encryption keys, push credentials, the optional SDK, and your browser and service-worker integration.
 
-Do not infer migration of an existing application's history, preferences, or pending deliveries from installing this module. Consumers must define no-send import identities, a cutover boundary, one delivery owner, and acceptance-preserving rollback. Authentication/account-access mail ownership remains a consumer decision; CommuniArts keeps it outside Megaphone.
+Installing the module doesn't import your existing history, preferences, or pending deliveries. Plan the handoff from your old delivery owner, keep stable import IDs, and make sure rollback won't resend work that's already been accepted. You can decide separately whether Megaphone handles authentication and account-access mail.
 
-## Verification and release status
+## Validation
 
-Focused module database tests have run on Lucee 5.4 and consumer integration tests on BoxLang 1.18. Stable release preparation reran 69 database/preference checks and a separate 12 push-response/SDK-preparation checks successfully without provider sends. The publisher-filtered local archive declares version 1.1.0; its content checks passed. Broader engine matrices, actual push providers/devices, and deployment readiness are not established by those runs. Registry publication and consumer dependency adoption require separate receipts; this changelog is not proof of either. Verify registry availability before pinning a consumer, and do not represent a development link as release adoption.
+The release branch passed 69 database and preference checks and 12 push-response and SDK-preparation checks on CommandBox's Lucee runtime. These tests didn't send to providers. The local 1.1.0 archive also passed its content checks. Earlier consumer integration tests ran on BoxLang 1.18.
+
+The broader engine matrix, real push providers and devices, clean installation of this stable candidate, and deployment still need verification. This package hasn't been published yet. Check ForgeBox before updating a consumer's dependency pin, and verify the installed release rather than a local development link.
 
 # v1.0.4
 ## 19 Apr 2024 — 16:28:17 UTC
