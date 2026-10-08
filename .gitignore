@@ -7,3 +7,4 @@
 
 .env
 .tmp
+/resources/java/webpush/*.jar

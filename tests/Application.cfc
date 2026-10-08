@@ -14,9 +14,11 @@ component {
     this.mappings[ "/tests" ] = testsPath;
     rootPath = REReplaceNoCase( this.mappings[ "/tests" ], "tests(\\|/)", "" );
     this.mappings[ "/root" ] = rootPath;
+    this.javaSettings = { "loadPaths": [ rootPath & "resources/java/webpush" ], "loadColdFusionClassPath": true };
     this.mappings[ "/testingModuleRoot" ] = listDeleteAt( rootPath, listLen( rootPath, '\/' ), "\/" );
-    this.mappings[ "/megaphone" ] = listDeleteAt( rootPath, listLen( rootPath, '\/' ), "\/" );
+    this.mappings[ "/megaphone" ] = rootPath;
     this.mappings[ "/qb" ] = rootPath & "/modules/qb";
+    this.mappings[ "/cbpaginator" ] = rootPath & "/modules/qb/modules/cbpaginator";
     this.mappings[ "/cfmigrations" ] = rootPath & "/modules/cfmigrations";
     this.mappings[ "/str" ] = rootPath & "/modules/str";
     this.mappings[ "/app" ] = testsPath & "resources/app";
@@ -28,10 +30,6 @@ component {
 
     this.datasource = "megaphone";
 
-    function onApplicationStart() {
-        param url.reloadDatabase = true;
-    }
-
     function onRequestStart() {
         // applicationStop();
         // abort;
@@ -40,18 +38,16 @@ component {
         // New ColdBox Virtual Application Starter
 		request.coldBoxVirtualApp = new coldbox.system.testing.VirtualApp( appMapping = "/app" );
 
-		// If hitting the runner or specs, prep our virtual app and database
-		if ( getBaseTemplatePath().replace( expandPath( "/tests" ), "" ).reFindNoCase( "(runner|specs)" ) ) {
-			request.coldBoxVirtualApp.startup();
-		}
+        if ( structKeyExists( url, "fwreinit" ) || structKeyExists( url, "reloadDatabase" ) ) {
+            if ( structKeyExists( server, "lucee" ) ) {
+                pagePoolClear();
+            }
+        }
 
-		// Reload for fresh results
-		if( structKeyExists( url, "fwreinit" ) || structKeyExists( url, "reloadDatabase" )){
-			if( structKeyExists( server, "lucee" ) ){
-				pagePoolClear();
-			}
-			request.coldBoxVirtualApp.restart();
-		}
+        // Start once per runner request; onRequestEnd shuts down the virtual app.
+        if ( getBaseTemplatePath().replace( expandPath( "/tests" ), "" ).reFindNoCase( "(runner|specs)" ) ) {
+            request.coldBoxVirtualApp.startup();
+        }
 
         return true;
     }

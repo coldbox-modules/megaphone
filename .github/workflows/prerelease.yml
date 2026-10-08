@@ -44,6 +44,9 @@ jobs:
           box config set modules.commandbox-dotenv.checkEnvPreServerStart=false
           box install ${{ matrix.coldbox }} --noSave
 
+      - name: Install Web Push SDK
+        run: box task run taskFile=tasks/InstallWebPushSDK.cfc
+
       - name: Migrate database
         env:
           DB_HOST: localhost

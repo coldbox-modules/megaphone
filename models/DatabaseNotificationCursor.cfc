@@ -2,14 +2,21 @@ component accessors="true" {
 
     property name="channel";
     property name="qb";
+    property name="mutationQuery";
 
     property name="page";
     property name="maxRows";
     property name="results";
     property name="pagination";
 
-    public DatabaseNotificationCursor function configureQuery( required function callback ) {
-        callback( variables.qb );
+    public DatabaseNotificationCursor function configureQuery(
+        required function callback,
+        boolean constrainMutations = true
+    ) {
+        arguments.callback( variables.qb );
+        if ( arguments.constrainMutations && !isNull( variables.mutationQuery ) ) {
+            arguments.callback( variables.mutationQuery );
+        }
         return this;
     }
 
@@ -17,10 +24,16 @@ component accessors="true" {
         var res = variables.qb
             .clone()
             .orderByDesc( "createdDate" )
+            .orderByDesc( "id" )
             .paginate( variables.page, variables.maxRows );
         variables.pagination = res.pagination;
         variables.results = res.results.map( ( row ) => {
-            return newMegaphoneDatabaseNotification().setChannel( getChannel() ).populateFromDatabaseRow( row );
+            return newMegaphoneDatabaseNotification()
+                .setChannel( getChannel() )
+                .setMutationQuery(
+                    !isNull( variables.mutationQuery ) ? variables.mutationQuery.clone() : variables.qb.clone()
+                )
+                .populateFromDatabaseRow( row );
         } );
         return this;
     }
@@ -62,7 +75,10 @@ component accessors="true" {
     }
 
     public DatabaseNotificationCursor function markAllAsRead( date readDate = now() ) {
-        variables.qb.clone().update( { "readDate": arguments.readDate } );
+        variables.qb
+            .clone()
+            .whereNull( "readDate" )
+            .update( { "readDate": arguments.readDate } );
         return this;
     }
 
