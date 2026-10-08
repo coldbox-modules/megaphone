@@ -1,4 +1,4 @@
-# v1.1.0-rc.1 (release candidate)
+# v1.1.0 (pending stable release)
 
 ## Notification backend expansion
 
@@ -16,7 +16,7 @@ Do not infer migration of an existing application's history, preferences, or pen
 
 ## Verification and release status
 
-Focused module database tests have run on Lucee 5.4 and consumer integration tests on BoxLang 1.18. The local candidate verification passed 69 database/preference checks and a separate 12 push-response/SDK-preparation checks without provider sends. Broader engine matrices, actual push providers/devices, and deployment readiness are not established by those runs. Registry publication and consumer dependency adoption require separate receipts; this changelog is not proof of either. Verify registry availability before pinning a consumer, and do not represent a development link as release adoption.
+Focused module database tests have run on Lucee 5.4 and consumer integration tests on BoxLang 1.18. Stable release preparation reran 69 database/preference checks and a separate 12 push-response/SDK-preparation checks successfully without provider sends. The publisher-filtered local archive declares version 1.1.0; its content checks passed. Broader engine matrices, actual push providers/devices, and deployment readiness are not established by those runs. Registry publication and consumer dependency adoption require separate receipts; this changelog is not proof of either. Verify registry availability before pinning a consumer, and do not represent a development link as release adoption.
 
 # v1.0.4
 ## 19 Apr 2024 — 16:28:17 UTC
