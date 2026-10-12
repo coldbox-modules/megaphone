@@ -8,6 +8,14 @@
 - Encrypted push subscriptions, renewal and disconnect support, per-device delivery, response handling, and an optional SDK installer.
 - Event replay cutoffs and cleanup callbacks for keeping external references and retirement receipts.
 
+## API alignment
+
+- Durable planning and queueing now use NotificationService, notification instances/mappings, notifiables, registered providers, and delegates.
+- Added typed plans, publications, delivery/preparation/recovery results, keyset cursors, module storage configuration, and lazy Web Push infrastructure.
+- Preferences and subscriptions now use dedicated public services; stored columns and delivery identities are retained.
+- Restored released read-timestamp replacement behavior and added explicit if-unread operations.
+- Added an additive notification mapping migration and documented the RC data upgrade boundary.
+
 ## Fixed
 
 - MySQL delivery timestamps keep fractional seconds so immediately due work stays due.
@@ -22,9 +30,7 @@ Installing the module doesn't import your existing history, preferences, or pend
 
 ## Validation
 
-The release branch passed 198 tests on Lucee 5 and Adobe 2023 with ColdBox 6 and MySQL, and 202 tests on both engines with ColdBox 7. Adobe retained the four existing ColdBox 6 skips. The MySQL migrations passed a full rollback and reapplication. The 69 PostgreSQL database and preference checks passed too. These tests didn't send to providers. The local 1.1.0 archive also passed its content checks. Earlier consumer integration tests ran on BoxLang 1.18.
-
-The broader engine matrix, real push providers and devices, clean installation of this stable candidate, and deployment still need verification. This package hasn't been published yet. Check ForgeBox before updating a consumer's dependency pin, and verify the installed release rather than a local development link.
+Local API alignment checks passed: 205 module regressions on MySQL with four existing ColdBox 6 skips; 59 PostgreSQL checks; module migration rollback/reapplication; 212 focused CommuniArts checks across 41 bundles; and 1,143 Vitest checks. Clean installation, an upgrade with existing RC notification data, and repeated migrations were verified in disposable databases. Formatting and artifact inspection passed. Earlier candidate engine-matrix results do not validate this refactor. Hosted CI, browser matrices, real-provider/device checks, publication, and deployment remain deferred.
 
 # v1.0.4
 ## 19 Apr 2024 — 16:28:17 UTC

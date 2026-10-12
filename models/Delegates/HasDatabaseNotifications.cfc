@@ -2,6 +2,18 @@ component {
 
     property name="databaseNotificationService" inject="DatabaseNotificationService@megaphone";
 
+    public DatabaseNotificationKeysetCursor function getNotificationsAfter(
+        string channelName = "database",
+        string afterCursor = "",
+        numeric maxRows = 25,
+        any constraints,
+        string archiveMode = "active",
+        boolean unread = false
+    ) {
+        arguments.notifiable = $parent;
+        return variables.databaseNotificationService.getNotificationsAfter( argumentCollection = arguments );
+    }
+
     /**
      * Returns all database notifications for a Notifiable.
      * @returns DatabaseNotificationCursor

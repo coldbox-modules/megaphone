@@ -46,10 +46,18 @@ component extends="testbox.system.BaseSpec" {
                     { "id": "laptop", "active": true },
                     { "id": "old", "active": false }
                 ];
-                expect( variables.resolver.selectDevices( devices, [ "phone" ] ).map( ( device ) => device.id ) ).toBe( [ "laptop" ] );
+                expect(
+                    new megaphone.models.PushSubscriptionService()
+                        .selectDevices( devices, [ "phone" ] )
+                        .map( ( device ) => device.id )
+                ).toBe( [ "laptop" ] );
                 devices.append( { "id": "tablet", "active": true } );
                 devices.append( { "id": "laptop", "active": true } );
-                expect( variables.resolver.selectDevices( devices, [ "phone" ] ).map( ( device ) => device.id ) ).toBe( [ "laptop", "tablet" ] );
+                expect(
+                    new megaphone.models.PushSubscriptionService()
+                        .selectDevices( devices, [ "phone" ] )
+                        .map( ( device ) => device.id )
+                ).toBe( [ "laptop", "tablet" ] );
             } );
         } );
     }

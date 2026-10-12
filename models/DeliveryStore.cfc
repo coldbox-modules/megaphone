@@ -1,9 +1,10 @@
 /** One durable owner per event/recipient/channel/device. Never performs provider I/O. */
 component accessors="true" {
 
-    property name="properties";
+    property name="properties" type="struct" setter="false";
+    property name="uuidGenerator" inject="java:java.util.UUID";
 
-    function init( struct properties = {} ) {
+    public DeliveryStore function init( struct properties = {} ) {
         variables.properties = arguments.properties;
         return this;
     }
@@ -128,9 +129,7 @@ component accessors="true" {
     /** Trusted backend listing. Application constraints run before stable ordering and pagination. */
     public struct function getPage( numeric maxRows = 50, numeric offset = 0, any constraints ) {
         var size = max( 1, min( 200, fix( arguments.maxRows ) ) );
-        var query = newDeliveryQuery()
-            .from( ( variables.properties.table ?: "megaphone_deliveries" ) & " AS delivery" )
-            .select( "delivery.*" );
+        var query = newDeliveryQuery().from( ( getTableName() ) & " AS delivery" ).select( "delivery.*" );
         if ( !isNull( arguments.constraints ) ) {
             arguments.constraints( query );
         }
@@ -150,7 +149,7 @@ component accessors="true" {
 
     /** Trusted backend reconciliation: filters apply before aggregate counts. */
     public array function stateCounts( any constraints ) {
-        var query = newDeliveryQuery().from( ( variables.properties.table ?: "megaphone_deliveries" ) & " AS delivery" );
+        var query = newDeliveryQuery().from( ( getTableName() ) & " AS delivery" );
         if ( !isNull( arguments.constraints ) ) {
             arguments.constraints( query );
         }
@@ -189,17 +188,17 @@ component accessors="true" {
     }
 
     public boolean function canRecover( required struct delivery ) {
-        return listFind( "retryable,permanent", arguments.delivery.state ) > 0 && arguments.delivery.recoveryAllowance < 45;
+        return listFind( "retryable,permanent", arguments.delivery.state ) > 0 && arguments.delivery.recoveryAllowance < (
+            structKeyExists( variables.properties, "maxRecoveryAllowance" ) ? variables.properties.maxRecoveryAllowance : 45
+        );
     }
 
     /** Caller supplies operator authorization and live eligibility. No provider I/O occurs here. */
-    public struct function requestRecovery(
+    public struct function recover(
         required string id,
         required string requestKey,
         required string actorId,
         required string expectedVersion,
-        required function eligibility,
-        required any queueAdapter,
         numeric additionalAttempts = 1,
         string actorLabel = "",
         date clock = now()
@@ -208,7 +207,9 @@ component accessors="true" {
             !len( trim( arguments.requestKey ) ) || len( arguments.requestKey ) > 128 ||
             !len( trim( arguments.actorId ) ) || len( arguments.actorId ) > 190 || len( arguments.actorLabel ) > 190 ||
             !reFind( "^[a-f0-9]{64}$", arguments.expectedVersion ) || arguments.additionalAttempts < 1 ||
-            arguments.additionalAttempts > 5 || fix( arguments.additionalAttempts ) != arguments.additionalAttempts
+            arguments.additionalAttempts > (
+                structKeyExists( variables.properties, "maxRecoveryAttempts" ) ? variables.properties.maxRecoveryAttempts : 5
+            ) || fix( arguments.additionalAttempts ) != arguments.additionalAttempts
         ) {
             throw(
                 type = "Megaphone.Delivery.InvalidRecovery",
@@ -249,13 +250,11 @@ component accessors="true" {
             }
             if (
                 !canRecover( decode( row ) ) || recoveryVersion( decode( row ) ) != arguments.expectedVersion ||
-                row.recoveryAllowance + arguments.additionalAttempts > 45
+                row.recoveryAllowance + arguments.additionalAttempts > (
+                    structKeyExists( variables.properties, "maxRecoveryAllowance" ) ? variables.properties.maxRecoveryAllowance : 45
+                )
             ) {
                 return { status: "conflict" };
-            }
-            var ready = arguments.eligibility( decode( row ) );
-            if ( !isStruct( ready ) || ( ready.status ?: "" ) != "ready" ) {
-                return { status: "ineligible" };
             }
             var receipt = {
                 "id": uuid(),
@@ -288,7 +287,6 @@ component accessors="true" {
                     "settledDate": timestamp()
                 } );
             var work = this.find( row.id );
-            arguments.queueAdapter.enqueue( work );
             return {
                 status: "saved",
                 replayed: false,
@@ -296,6 +294,17 @@ component accessors="true" {
                 delivery: work
             };
         }
+    }
+
+    public any function getRecoveryRequest( required string id, required string requestKey ) {
+        var rows = newRecoveryQuery()
+            .where( "deliveryId", arguments.id )
+            .where( "requestKey", arguments.requestKey )
+            .get();
+        if ( rows.isEmpty() ) {
+            return;
+        }
+        return rows[ 1 ];
     }
 
     public struct function recoveryHistory( required string id, numeric maxRows = 20, numeric offset = 0 ) {
@@ -317,7 +326,7 @@ component accessors="true" {
     private any function newRecoveryQuery() {
         return newQueryBuilder()
             .from( variables.properties.recoveriesTable ?: "megaphone_delivery_recoveries" )
-            .mergeDefaultOptions( variables.properties.queryOptions ?: {} );
+            .mergeDefaultOptions( getQueryOptions() );
     }
 
     /** Claim and attempt creation commit before provider I/O. Duplicate jobs cannot share a lease. */
@@ -486,7 +495,7 @@ component accessors="true" {
     }
 
     /** Verified receipts may originate from an older attempt or a previous delivery owner during migration. */
-    public boolean function reconcileAccepted( required string id, required function acceptance, date clock = now() ) {
+    public boolean function reconcileReceipt( required string id, required struct receipt, date clock = now() ) {
         transaction {
             var rows = newDeliveryQuery()
                 .where( "id", arguments.id )
@@ -501,7 +510,7 @@ component accessors="true" {
             }
             // The consumer validates an authoritative receipt for this immutable delivery identity.
             // This callback must perform local checks only, never provider I/O.
-            var receipt = arguments.acceptance( decode( row ) );
+            var receipt = arguments.receipt;
             if ( !isStruct( receipt ) || !structKeyExists( receipt, "accepted" ) || !isBoolean( receipt.accepted ) ) {
                 throw(
                     type = "Megaphone.Delivery.InvalidReceipt",
@@ -605,7 +614,7 @@ component accessors="true" {
     /** Terminal diagnostic cleanup retains durable delivery identities and receipts. */
     public numeric function pruneAttempts( required date beforeDate, numeric limit = 200 ) {
         validateBatch( arguments.limit );
-        var deliveryTable = variables.properties.table ?: "megaphone_deliveries";
+        var deliveryTable = getTableName();
         var attemptsTable = variables.properties.attemptsTable ?: "megaphone_delivery_attempts";
         var candidates = newAttemptQuery()
             .where( "finishedDate", "<", arguments.beforeDate )
@@ -653,11 +662,11 @@ component accessors="true" {
     ) {
         validateBatch( arguments.limit );
         var eventTable = variables.properties.eventsTable ?: "megaphone_events";
-        var deliveryTable = variables.properties.table ?: "megaphone_deliveries";
+        var deliveryTable = getTableName();
         var deliveryCutoff = arguments.deliveriesBefore;
         var candidateQuery = newQueryBuilder()
             .from( eventTable )
-            .mergeDefaultOptions( variables.properties.queryOptions ?: {} )
+            .mergeDefaultOptions( getQueryOptions() )
             .where( "createdDate", "<", arguments.eventsBefore )
             .whereNotExists( ( query ) => query
                 .from( deliveryTable )
@@ -679,7 +688,7 @@ component accessors="true" {
             transaction {
                 var events = newQueryBuilder()
                     .from( eventTable )
-                    .mergeDefaultOptions( variables.properties.queryOptions ?: {} )
+                    .mergeDefaultOptions( getQueryOptions() )
                     .where( "id", candidate.id )
                     .lockForUpdate();
                 if ( !isNull( arguments.constraints ) ) {
@@ -712,7 +721,7 @@ component accessors="true" {
                 }
                 newQueryBuilder()
                     .from( eventTable )
-                    .mergeDefaultOptions( variables.properties.queryOptions ?: {} )
+                    .mergeDefaultOptions( getQueryOptions() )
                     .where( "id", candidate.id )
                     .delete();
                 removed++;
@@ -769,19 +778,28 @@ component accessors="true" {
         return { "value": arguments.value, "null": false, "cfsqltype": "varchar" };
     }
     private string function uuid() {
-        return createObject( "java", "java.util.UUID" ).randomUUID().toString();
+        return variables.uuidGenerator.randomUUID().toString();
     }
     private any function newDeliveryQuery() {
-        return newQueryBuilder()
-            .from( variables.properties.table ?: "megaphone_deliveries" )
-            .mergeDefaultOptions( variables.properties.queryOptions ?: {} );
+        return newQueryBuilder().from( getTableName() ).mergeDefaultOptions( getQueryOptions() );
     }
     private any function newAttemptQuery() {
         return newQueryBuilder()
             .from( variables.properties.attemptsTable ?: "megaphone_delivery_attempts" )
-            .mergeDefaultOptions( variables.properties.queryOptions ?: {} );
+            .mergeDefaultOptions( getQueryOptions() );
     }
-    private any function newQueryBuilder() provider="QueryBuilder@qb" {
+    public string function getTableName() {
+        return variables.properties.table ?: "megaphone_deliveries";
+    }
+    public struct function getQueryOptions() {
+        var options = duplicate( variables.properties.queryOptions ?: {} );
+        if ( variables.properties.keyExists( "datasource" ) ) {
+            options.datasource = variables.properties.datasource;
+        }
+        return options;
+    }
+
+    private QueryBuilder function newQueryBuilder() provider="QueryBuilder@qb" {
     }
 
 }

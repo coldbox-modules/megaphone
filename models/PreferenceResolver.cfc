@@ -45,26 +45,4 @@ component singleton {
         return resolved;
     }
 
-    /** New device registrations are included without copying preference rows. */
-    public array function selectDevices( required array devices, array excludedIds = [] ) {
-        var selected = [];
-        var seen = {};
-        for ( var device in arguments.devices ) {
-            if ( !isStruct( device ) || !structKeyExists( device, "id" ) || !len( trim( device.id ) ) ) {
-                throw(
-                    type = "Megaphone.Preferences.InvalidDevice",
-                    message = "A device needs a stable registration ID."
-                );
-            }
-            if ( structKeyExists( device, "active" ) && !device.active ) {
-                continue;
-            }
-            if ( !arguments.excludedIds.findNoCase( device.id ) && !structKeyExists( seen, device.id ) ) {
-                seen[ device.id ] = true;
-                selected.append( duplicate( device ) );
-            }
-        }
-        return selected;
-    }
-
 }

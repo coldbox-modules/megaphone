@@ -1,5 +1,48 @@
 component extends="BaseProvider" accessors="true" {
 
+    property name="wirebox" inject="wirebox";
+
+    public DeliveryPreparation function prepareDelivery(
+        required any notifiable,
+        required any notification,
+        required any delivery
+    ) {
+        var event = variables.wirebox
+            .getInstance( "NotificationDeliveryService@megaphone" )
+            .getEvent( arguments.delivery.getEventId() );
+        var context = arguments.notification.getDeliveryContext( arguments.notifiable, getName() );
+        return new megaphone.models.DeliveryPreparation( {
+            "data": {
+                "notifiable": arguments.notifiable,
+                "notificationType": arguments.notification.getNotificationType(),
+                "createdDate": event.getCreatedDate(),
+                "groupKey": context.groupKey ?: "",
+                "data": arguments.notification.routeForType(
+                    "database",
+                    arguments.notifiable,
+                    getName(),
+                    { "delivery": arguments.delivery }
+                )
+            }
+        } );
+    }
+
+    public DeliveryResult function sendDelivery( required any prepared, required any delivery ) {
+        var data = arguments.prepared.getData();
+        var entry = variables.wirebox
+            .getInstance( "DatabaseNotificationService@megaphone" )
+            .importNotification(
+                notifiable = data.notifiable,
+                id = arguments.delivery.getId(),
+                type = data.notificationType,
+                data = data.data,
+                createdDate = data.createdDate,
+                groupKey = data.groupKey,
+                channelName = getName()
+            );
+        return new megaphone.models.DeliveryResult( { "status": "accepted", "providerReference": entry.getId() } );
+    }
+
     public string function getProviderName() {
         return "DatabaseProvider";
     }

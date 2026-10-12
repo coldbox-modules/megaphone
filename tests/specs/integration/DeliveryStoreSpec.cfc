@@ -7,6 +7,15 @@ component extends="tests.specs.integration.EventStoreSpec" {
             .map( "DeliveryStore@megaphone" )
             .to( "megaphone.models.DeliveryStore" );
         variables.deliveries = variables.injector.getInstance( "DeliveryStore@megaphone" );
+        variables.injector
+            .getBinder()
+            .map( "NotificationRuntime@megaphone" )
+            .to( "tests.resources.DurableRuntimeFixture" );
+        variables.injector
+            .getBinder()
+            .map( "NotificationDeliveryService@megaphone" )
+            .to( "megaphone.models.NotificationDeliveryService" );
+        variables.operations = variables.injector.getInstance( "NotificationDeliveryService@megaphone" );
     }
 
     function run() {
@@ -48,7 +57,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 var adapter = new tests.resources.DurableQueueFixture();
                 var key = createUUID();
                 var version = variables.deliveries.recoveryVersion( prior );
-                var result = variables.deliveries.requestRecovery(
+                var result = requestRecovery(
                     work.id,
                     key,
                     "operator",
@@ -79,7 +88,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
                     providerReference = "accepted-sixth"
                 );
                 expect(
-                    variables.deliveries.requestRecovery(
+                    requestRecovery(
                         work.id,
                         key,
                         "operator",
@@ -93,7 +102,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 expect( adapter.getDeliveries().len() ).toBe( 1 );
                 var accepted = variables.deliveries.find( work.id );
                 expect(
-                    variables.deliveries.requestRecovery(
+                    requestRecovery(
                         work.id,
                         createUUID(),
                         "operator",
@@ -131,7 +140,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
                     ]
                 ) {
                     expect(
-                        variables.deliveries.requestRecovery(
+                        requestRecovery(
                             work.id,
                             createUUID(),
                             "operator",
@@ -161,7 +170,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 var version = variables.deliveries.recoveryVersion( work );
                 var adapter = new tests.resources.DurableQueueFixture();
                 expect(
-                    variables.deliveries.requestRecovery(
+                    requestRecovery(
                         work.id,
                         createUUID(),
                         "operator",
@@ -173,7 +182,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
                     ).status
                 ).toBe( "conflict" );
                 expect(
-                    variables.deliveries.requestRecovery(
+                    requestRecovery(
                         work.id,
                         createUUID(),
                         "operator",
@@ -186,7 +195,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 ).toBe( "ineligible" );
                 expect( variables.deliveries.recoveryHistory( work.id ).results.len() ).toBe( 0 );
                 var key = createUUID();
-                var recovered = variables.deliveries.requestRecovery(
+                var recovered = requestRecovery(
                     work.id,
                     key,
                     "operator",
@@ -200,7 +209,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 expect( dateCompare( recovered.delivery.availableDate, later, "s" ) ).toBe( 0 );
                 expect( variables.deliveries.due().len() ).toBe( 0 );
                 expect(
-                    variables.deliveries.requestRecovery(
+                    requestRecovery(
                         work.id,
                         key,
                         "different-operator",
@@ -234,7 +243,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 var adapter = new tests.resources.DurableQueueFixture();
                 expect( variables.deliveries.canRecover( work ) ).toBeFalse();
                 expect(
-                    variables.deliveries.requestRecovery(
+                    requestRecovery(
                         work.id,
                         createUUID(),
                         "operator",
@@ -364,13 +373,13 @@ component extends="tests.specs.integration.EventStoreSpec" {
             it( "imports verified acceptance without sending and fences a subsequently confirmed older receipt", () => {
                 var imported = enqueue();
                 expect(
-                    variables.deliveries.reconcileAccepted( imported.id, ( work ) => {
+                    variables.operations.reconcileAccepted( imported.id, ( work ) => {
                         return { "accepted": false };
                     } )
                 ).toBeFalse();
                 expect( variables.deliveries.find( imported.id ).state ).toBe( "queued" );
                 expect(
-                    variables.deliveries.reconcileAccepted( imported.id, ( work ) => {
+                    variables.operations.reconcileAccepted( imported.id, ( work ) => {
                         return { "accepted": true, "providerReference": "previous-owner-receipt" };
                     } )
                 ).toBeTrue();
@@ -379,7 +388,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 var pending = enqueue( device = "receipt-device" );
                 var claimed = variables.deliveries.claim( pending.id );
                 expect(
-                    variables.deliveries.reconcileAccepted( pending.id, ( work ) => {
+                    variables.operations.reconcileAccepted( pending.id, ( work ) => {
                         return { "accepted": true, "providerReference": "late-accepted-receipt" };
                     } )
                 ).toBeTrue();
@@ -527,7 +536,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
                     providerReference = "definite-rejection"
                 );
                 var prior = variables.deliveries.find( work.id );
-                variables.deliveries.requestRecovery(
+                requestRecovery(
                     work.id,
                     createUUID(),
                     "operator",
@@ -614,7 +623,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
                     providerReference = "historical-rejection",
                     clock = past
                 );
-                var recovered = variables.deliveries.requestRecovery(
+                var recovered = requestRecovery(
                     work.id,
                     createUUID(),
                     "operator",
@@ -702,6 +711,24 @@ component extends="tests.specs.integration.EventStoreSpec" {
             initialState = arguments.initialState,
             availableDate = arguments.availableDate
         );
+    }
+
+    private struct function requestRecovery(
+        required string id,
+        required string requestKey,
+        required string actorId,
+        required string expectedVersion,
+        required function eligibility,
+        required any queueAdapter,
+        numeric additionalAttempts = 1,
+        string actorLabel = "",
+        date clock = now()
+    ) {
+        var values = structCopy( arguments );
+        var callback = arguments.eligibility;
+        values.eligibility = ( work ) => new megaphone.models.DeliveryPreparation( callback( work.getMemento() ) );
+        var result = variables.operations.requestRecovery( argumentCollection = values ).getMemento();
+        return result;
     }
 
 }

@@ -5,6 +5,33 @@ component extends="BaseProvider" accessors="true" {
     property name="wirebox" inject="wirebox";
     property name="mailService";
 
+    public DeliveryPreparation function prepareDelivery(
+        required any notifiable,
+        required any notification,
+        required any delivery
+    ) {
+        return durableAdapter().prepareDelivery( arguments.notifiable, arguments.notification, arguments.delivery );
+    }
+
+    public DeliveryResult function sendDelivery( required any prepared, required any delivery ) {
+        return durableAdapter().sendDelivery( arguments.prepared, arguments.delivery );
+    }
+
+    public boolean function supportsDurableDelivery() {
+        var properties = getProperties();
+        return structKeyExists( properties, "durableAdapter" ) && len( properties.durableAdapter );
+    }
+
+    private any function durableAdapter() {
+        if ( !supportsDurableDelivery() ) {
+            throw(
+                type = "Megaphone.Configuration.UnsupportedDurableProvider",
+                message = "Durable email requires an explicit receipt-aware adapter."
+            );
+        }
+        return variables.wirebox.getInstance( getProperties().durableAdapter );
+    }
+
     function onDIComplete() {
         try {
             variables.moduleService.activateModule( "cbmailservices" );

@@ -47,7 +47,10 @@ component {
                 "box.json",
                 "ModuleConfig.cfc",
                 "models/DeliveryStore.cfc",
-                "models/DurableNotificationService.cfc",
+                "models/NotificationService.cfc",
+                "models/NotificationDeliveryService.cfc",
+                "models/NotificationPlan.cfc",
+                "models/Providers/WebPushProvider.cfc",
                 "models/Delegates/DatabaseNotificationService.cfc",
                 "tasks/InstallWebPushSDK.cfc",
                 "resources/database/migrations/2026_10_06_010002_complete_megaphone_recovery_allowance.cfc"

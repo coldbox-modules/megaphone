@@ -1,22 +1,65 @@
 component {
 
-	this.name         = "megaphone";
-	this.author       = "Ortus Solutions";
-	this.webUrl       = "https://github.com/coldbox-modules/megaphone";
-	this.dependencies = [ "qb", "str" ];
-	this.cfmapping    = "megaphone";
+    this.name = "megaphone";
+    this.author = "Ortus Solutions";
+    this.webUrl = "https://github.com/coldbox-modules/megaphone";
+    this.dependencies = [ "qb", "str" ];
+    this.cfmapping = "megaphone";
 
-	function configure() {
-		settings = {
-			"channels": {}
-		};
+    function configure() {
+        settings = {
+            "channels": {},
+            "storage": {
+                "events": {},
+                "deliveries": {},
+                "preferences": {},
+                "subscriptions": {}
+            },
+            "durable": {
+                "queueAdapter": "",
+                "notifiableResolver": "",
+                "eligibilityPolicy": "",
+                "snapshotHasher": "",
+                "deliveryPolicy": "",
+                "leaseSeconds": 60,
+                "maxAttempts": 5,
+                "retrySeconds": 30,
+                "maxRecoveryAttempts": 5,
+                "maxRecoveryAllowance": 45
+            }
+        };
 
-		binder.getInjector().registerDSL( "megaphone", "#moduleMapping#.dsl.MegaphoneDSL" );
-	}
+        binder.getInjector().registerDSL( "megaphone", "#moduleMapping#.dsl.MegaphoneDSL" );
+    }
 
-	function onLoad() {
-		variables.wirebox.getInstance( "NotificationService@megaphone" )
-			.registerChannels( settings.channels ?: {} );
-	}
+    function onLoad() {
+        param settings.storage = {};
+        param settings.durable = {};
+        param settings.durable.leaseSeconds = 60;
+        param settings.durable.maxAttempts = 5;
+        param settings.durable.retrySeconds = 30;
+        param settings.durable.maxRecoveryAttempts = 5;
+        param settings.durable.maxRecoveryAllowance = 45;
+        var stores = {
+            "events": "EventStore",
+            "deliveries": "DeliveryStore",
+            "preferences": "PreferenceStore",
+            "subscriptions": "SubscriptionStore"
+        };
+        for ( var key in stores ) {
+            var properties = settings.storage[ key ] ?: {};
+            settings.storage[ key ] = properties;
+            if ( key == "deliveries" ) {
+                properties = duplicate( properties );
+                properties.maxRecoveryAttempts = settings.durable.maxRecoveryAttempts;
+                properties.maxRecoveryAllowance = settings.durable.maxRecoveryAllowance;
+            }
+            binder
+                .map( stores[ key ] & "@megaphone" )
+                .to( moduleMapping & ".models." & stores[ key ] )
+                .initArg( name = "properties", value = properties );
+        }
+        variables.wirebox.getInstance( "NotificationService@megaphone" ).registerChannels( settings.channels ?: {} );
+    }
 
 }

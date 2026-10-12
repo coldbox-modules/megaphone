@@ -20,7 +20,7 @@ component {
 					"provider": "DatabaseProvider@megaphone",
 					"properties": {
                         // this is the default table name
-						"tableName": "megaphone_notifications",
+						"table": "megaphone_notifications",
 						"datasource": "megaphone"
 					}
 				}
@@ -256,7 +256,7 @@ component {
         // ...
         var cursor = variables.databaseNotificationService.getUnreadNotifications(
             notifiable = auth().user(),
-            channel = "database" // default is "database",
+            channelName = "database" // default is "database",
             initialPage = 1 // default is 1,
             maxRows = 25 // default is 25
         );
@@ -289,7 +289,7 @@ component {
     function index( event, rc, prc ) {
         // ...
         var cursor = auth().user().getUnreadNotifications(
-            channel = "database" // default is "database",
+            channelName = "database" // default is "database",
             initialPage = 1 // default is 1,
             maxRows = 25 // default is 25
         );
@@ -409,114 +409,116 @@ The `mailer` property is the default mailer for this channel. (It does not have 
 
 The `onSuccess` and `onError` callbacks are the default callbacks called on the `Mail` object after is has been sent.  By default, these are both no-ops.
 
-### Browsing delivery history
+## Durable notifications
 
-`DeliveryStore.getPage(maxRows=50, offset=0, constraints=callback)` returns
-`{ results, hasMore }` without claiming or sending work. Results are ordered by
-updated date descending, then delivery ID. Page sizes are limited to 1–200, with
-one extra row fetched to check for another page. Routing data is decoded for you.
+Use the same notifiable and notification conventions for immediate and queued delivery:
 
-The callback receives a query with the `delivery` alias before ordering and
-pagination. Use it to add filters, domain joins, and metadata. Check operator
-access and add the recipient, namespace, and domain restrictions your app needs.
-This method doesn't expose an HTTP endpoint or choose your application's scopes.
+```cfc
+megaphone.notify(user, "OrderReadyNotification", { "orderId": orderId });
+var publication = megaphone.queue(
+    notifiables = user,
+    notification = "OrderReadyNotification",
+    properties = { "orderId": orderId },
+    options = { "namespace": "Orders", "eventKey": orderId, "version": 1 }
+);
+publication.getEvent().getId();
+publication.getDeliveries()[1].getId();
+```
 
-### Recovering failed deliveries
+`NotificationService.plan()` accepts the same arguments and returns a `NotificationPlan` without writing or sending. `queue()` plans and stores work in the caller's datasource transaction. `SendsNotifications` also provides `queue()`.
 
-`DeliveryStore.requestRecovery(id, requestKey, actorId, expectedVersion,
-eligibility, queueAdapter, additionalAttempts=1, actorLabel="")` records who
-requested a retry and queues the work in the same transaction. Get
-`expectedVersion` from `recoveryVersion(delivery)` and check that the operator
-can recover this delivery before calling it.
+Options are `namespace` (default `megaphone`), `eventKey` (generated if omitted), `version` (1), `occurredAt` and `availableDate` (now), and optional `admitAfter`. Occurrences older than the cutoff return an expired publication without recording work. Equality is admitted.
 
-Your eligibility callback checks current recipient access, preferences, and
-domain state, then returns `{ status: "ready" }`. The queue adapter saves its job
-in the same datasource transaction. It must not send to a provider there.
+Persist `plan.getMemento()` when admission must precede worker handoff. Restore it with `new megaphone.models.NotificationPlan({}, []).populateFromMemento(saved)` and call `queuePlan(plan)`. Its version 1 memento contains `event`, `deliveries`, and optional `admitAfter`. It preserves identities, payloads, hashes, destinations, and channel choices. A trusted producer may use `queuePlan(plan, alreadyAdmitted=true)` after validating its original persisted admission. This bypasses the replay cutoff; it does not replan the audience.
 
-You can recover retryable or permanently failed work. Accepted, ambiguous,
-suppressed, and processing work can't be recovered. Existing attempt and transport
-counts, provider references, and future backoff are preserved. Each request adds
-1–5 transports, up to 45 additional transports over the delivery's lifetime.
+Notifications extend `BaseNotification`, implement `via(notifiable)` and the usual `to{Provider}` methods, and may override `getChannelPreferences(notifiable)` to return a channel-name map of `{ enabled, source }`. The default enables the channels returned by `via()`. Synchronous delivery skips disabled channels. Durable delivery records them as suppressed; later opt-in does not revive them.
 
-Repeating the same request key and intent returns the original receipt. Reusing
-that key for different intent is a conflict. A stale version or failed eligibility
-check creates no receipt or job. Check for external acceptance before requesting
-recovery; a permanent state alone doesn't prove the old provider rejected it.
+`getQueueProperties()` defaults to the explicitly populated properties. Notifications configured through setters must override it to return their durable properties. Store JSON data rather than components, closures, credentials, users, or prepared mail/request objects. `getNotificationMapping()` defaults to the WireBox identity; override it when notification type and reconstruction mapping differ. `getDeliveryContext(notifiable, channelName)` provides application routing context, separate from the notification properties.
 
-`recoveryHistory(id, maxRows=20, offset=0)` gives you pages of recovery receipts,
-including the operator, previous state, counts, evidence, and added allowance.
-Resolved-event cleanup removes these receipts with the other delivery diagnostics.
-Migration 010002 completes the column addition from 010000. Rolling back 010002
-leaves that column for 010000 to remove when rolling back the recovery feature.
+### Module configuration
 
-Attempt cleanup locks the delivery and checks that it's still terminal before
-removing expired diagnostics. Event cleanup locks the event and its deliveries
-in ID order, then checks every delivery's terminal state and settlement cutoff.
-Recovering work protects the event, attempts, and receipts from cleanup. Settling
-it again starts a new retention period. Choose an event cutoff beyond your
-supported replay window; the inbox retention setting doesn't define that window.
+```cfc
+moduleSettings.megaphone = {
+    "channels": {
+        "database": { "provider": "DatabaseProvider@megaphone", "properties": {} },
+        "email": { "provider": "EmailProvider@megaphone", "properties": { "durableAdapter": "ActivityMailAdapter" } },
+        "push": { "provider": "WebPushProvider@megaphone", "properties": { "runtime": "ApplicationPushRuntime" } }
+    },
+    "storage": {
+        "events": {}, "deliveries": {}, "preferences": {}, "subscriptions": {}
+    },
+    "durable": {
+        "queueAdapter": "NotificationQueue",
+        "notifiableResolver": "NotifiableResolver",
+        "eligibilityPolicy": "NotificationEligibility",
+        "snapshotHasher": "NotificationSnapshotHasher@megaphone",
+        "leaseSeconds": 60, "maxAttempts": 5, "retrySeconds": 30,
+        "maxRecoveryAttempts": 5, "maxRecoveryAllowance": 45
+    }
+};
+```
 
-### Counting delivery states
+Storage settings accept `table`, `queryOptions`, and `datasource`. Deliveries also accept `attemptsTable`, `eventsTable`, and `recoveriesTable`; subscriptions accept `exclusionsTable`. Adapt migrations when using custom table names, and keep related table settings consistent. New public APIs use `notifiableType`, `notifiableId`, and `channelName`; existing storage columns remain unchanged.
 
-`DeliveryStore@megaphone.stateCounts(constraints)` returns channel/state/total
-groups using distinct delivery IDs. The optional callback gets the same `delivery`
-alias as `getPage`. Use it to filter by ownership, namespace, or migration before
-counting. You can compare stored states without loading every delivery or writing
-queries against Megaphone's tables. These counts tell you the current delivery
-state, not whether the recipient received or read the message.
+A queue adapter implements `enqueue(delivery)` and stores only `delivery.getId()` in the same datasource transaction. It must not send there. Queue insertion failure rolls back publication. Without an adapter, schedule `NotificationDeliveryService.getDueDeliveries()` and `recoverExpired()`.
 
-### Limiting event replay
+A notifiable resolver implements `resolve(type, id)` and returns the matching current notifiable or null. An optional `deliveryPolicy` mapping implements `getDispatchOptions(id)` to provide lease, attempt, and retry options; explicit dispatch options take precedence.
 
-`DurableNotificationService.publish(event, intents, queueAdapter, admitAfter)`
-lets you set an occurrence cutoff. Supply the saved domain occurrence time in
-`event.createdDate`. A missing or invalid value throws
-`Megaphone.Events.OccurrenceRequired`. An occurrence strictly older than the
-cutoff returns `{ event: { id: "", created: false, expired: true }, deliveries: [] }`
-without saving an event, delivery, or queue job. An occurrence equal to the cutoff
-is allowed. Calls without `admitAfter` keep their existing behavior.
+An optional eligibility policy implements `check(delivery, notifiable, event)` and returns a `DeliveryPreparation` with status `ready`, `suppressed`, `deferred`, or `permanent`, plus optional reason and retry date. Application authorization, source revision, and feature checks belong here. Preferences are checked before transport too.
 
-You can call `canPublish(occurredAt, admitAfter)` before resolving recipients and
-preferences to skip that work for expired events. `publish` checks again before
-saving. An expired publication doesn't cancel existing deliveries; their owner
-still handles recovery. Imports that don't send and migrations of pending work
-can use their own cutoff rules.
+The default snapshot hasher sorts object keys and preserves array order. An application hasher implements `digest(value, context)`, where context includes `namespace` and `kind` (`payload` or `routing`). Retain an existing canonical hash algorithm when upgrading persisted events.
 
-Choose an event retention cutoff no later than the admission cutoff, and keep
-unresolved work independently. Use the original saved occurrence time on every
-producer, not the time a retry runs. If you've pruned event identities, restore
-the deduplication evidence before widening the replay window. Admission checks
-don't run cleanup or remove queue and provider records for you.
+### Providers and dispatch
 
-`pruneResolvedEvents(eventsBefore, deliveriesBefore, limit=100, constraints)`
-accepts a backend query callback. It filters candidates before the batch limit
-and runs again against the locked event before deletion. Use it to limit cleanup
-to your namespace or keep events with external queue or import references.
-Megaphone still checks terminal states, settlement cutoffs, and parent/child
-locks. Your external reference updates need compatible locking so they don't
-race event deletion.
+Providers may implement the optional `IDurableNotificationProvider` capability:
 
-`DeliveryStore.find(id, lockRow=false)` can lock a delivery for lifecycle work in
-your app. Set `lockRow=true` inside your transaction and keep that transaction
-open until the external reference update is finished. Recovery, claims,
-completion, and retention use the same delivery lock. The lookup doesn't start
-a transaction or check caller authorization for you.
+- `prepareDelivery(notifiable, notification, delivery)` returns a `DeliveryPreparation`; prepare content without provider I/O.
+- `sendDelivery(prepared, delivery)` returns a `DeliveryResult` with status `accepted`, `retryable`, `permanent`, or `ambiguous` and optional reason, provider reference, and retry date.
 
-You can also pass `beforePrune(event, deliveries)` to `pruneResolvedEvents`.
-It runs inside the cleanup transaction after the event and terminal deliveries
-are locked and checked, but before they're removed. The callback gets copies of
-the stored rows. Use it to save a small retirement receipt in the same datasource.
-If it throws, deletion rolls back. Keep external I/O out of the callback. Pending,
-ambiguous, or otherwise ineligible events never reach it. Your app still manages
-its references and any evidence it keeps.
+Use `prepared.getData()` for transient transport objects. Its memento contains status metadata, not transport data. Existing synchronous `notify()` still returns a `BaseNotification`. A provider lacking durable support is rejected during planning. Durable email requires a configured adapter that supplies explicit acceptance evidence.
 
-### Building a local package
+`NotificationDeliveryService.dispatch(id, options={})` resolves the saved notification and registered channel, checks current eligibility, prepares delivery, checks again, and records transport start before sending. It returns a `DeliveryResult`. Options can override lease, attempt, and retry settings.
 
-Run `box task run taskFile=tasks/PrepareLocalArtifact.cfc` from the module root
-to build a local archive with ForgeBox's package filtering. It checks required
-runtime and migration files, excluded development files, dependencies and SDK
-JARs, duplicate paths, and each packaged file's source hash.
+Duplicate jobs cannot share a lease. Preparation failures and feature pauses do not consume transport allowance. An exception after transport starts is ambiguous and cannot trigger an automatic resend. Acceptance does not establish receipt or read state. Do not wrap provider I/O in an application transaction.
 
-The task writes `.tmp/megaphone-local-artifact.zip` and a receipt with file sizes
-and SHA-256 hashes. It doesn't publish or change the version. You'll still need
-to check clean installation, released-version adoption, and runtime compatibility
-separately.
+## Preferences and Web Push
+
+`NotificationPreferenceService@megaphone` provides `getPreferences`, `setPreference`, `resolvePreferences`, `importPreference`, `prunePreferences`, and `deleteNotifiable`. Supply a notifiable, notification type, and application-defined scopes. `setPreference(notifiable, notificationType, scopeKey, channelName, choice)` stores `on` or `off`; `inherit` removes the exact override. `resolvePreferences(notifiable, notificationType, defaults, scopeKeys)` applies scopes from broadest to most specific and returns both explicit scopes and effective values. Authorize scope access in the application.
+
+`WebPushProvider` participates in `via()` using its configured channel name. Notifications implement `toWebPush(notifiable, delivery)`; `routeNotificationForWebPush()` on a notifiable may provide device metadata, otherwise owned active registrations are used. Device exclusions apply per notification type. No eligible destination produces suppressed work without a phantom send. One expired device does not cancel another.
+
+`PushSubscriptionService@megaphone.register(notifiable, subscription, label, existingId="", expiresDate, channelName="push")` validates and encrypts browser subscriptions internally. Its public registration metadata excludes endpoints, hashes, and encrypted keys. Use `getRegistrations`, `rename`, `disconnect`, `setExcluded`, `getExcludedIds`, `pruneInactive`, and `deleteNotifiable` for device lifecycle. `retireExpired(notifiable, clock, limit)` retires expired destinations independently; omit the notifiable for bounded maintenance across owners. `getActiveRegistration` is for trusted delivery infrastructure and must not be exposed to clients.
+
+Push channel properties may configure `enabled`, `origin`, `publicKey`, `privateKey`, `subject`, `allowedHosts`, `activeStorageKeyId`, and `storageKeys` directly. The bundled runtime accepts base64 PKCS8/X509 VAPID keys and a storage keyring of base64 AES-256 keys. An optional runtime mapping implements `enabled`, `context(notifiable)`, `cipher`, and `transport`; use it to retain existing recipient/origin encryption contexts. Infrastructure is resolved lazily so disabled or incomplete push does not prevent other channels from starting.
+
+Install the optional Java 11+ SDK from the installed module directory:
+
+```sh
+box task run taskFile=tasks/InstallWebPushSDK.cfc
+```
+
+The installer verifies the pinned SDK checksum. Enrollment and service-worker integration remain application responsibilities. Registration does not change preferences or publish activity. Disconnect devices on logout/account switch. Provider tests use fixture HTTP clients; verify real devices separately before deployment.
+
+## Inbox cursors and read state
+
+`DatabaseNotificationService.getNotificationsAfter(notifiable, channelName="database", afterCursor="", maxRows=25, constraints, archiveMode="active", unread=false)` returns `DatabaseNotificationKeysetCursor`. The delegate offers the same method with an implicit notifiable. Use `getResults()`, `getNextCursor()`, `hasNext()`, and `next()`; its memento is `{ results, nextCursor, hasMore }`.
+
+Keep existing numbered-page cursor methods for offset pagination. Keyset pagination orders by exact stored creation time and ID, handles deleted boundaries and concurrent arrivals, and binds tokens to the notifiable. Configure `cursorTimestampExpression`, `cursorTimestampSqlType`, and `idSqlType` for the existing database adapter. PostgreSQL UUID columns use `other`; timestamp text must preserve precision. These settings are backend configuration, never client input.
+
+Apply the inbox-state migration and enable `properties.inboxState=true` for archive/group queries. Constraints run inside ownership filters before pagination and remain on loaded handles for mutations. `configureQuery(callback, constrainMutations=false)` is only for display filters; leave authorization constraints enabled. Reset the cursor when filters change.
+
+Released `markAsRead(readDate)` and cursor `markAllAsRead(readDate)` replace the timestamp. Use `markAsReadIfUnread()` and `markAllAsReadIfUnread()` to preserve the first read time. Read snapshots update only captured, currently authorized IDs; later arrivals remain unread. Archive and unarchive leave read state alone.
+
+`importNotification()` retains stable history IDs and sends nothing. `pruneNotifications()` removes bounded batches above the configured inbox cap. Inbox retention is separate from event replay and delivery evidence retention.
+
+## Delivery history, recovery, and upgrade
+
+`NotificationDeliveryService` provides `getEvent`, `getDelivery`, `getDeliveriesForEvent`, `getDeliveries`, `getStateCounts`, `getAttempts`, and `getRecoveryHistory`. Delivery pages return objects with `getResults()`, `getHasMore()`, and `getMemento()`. Events, deliveries, attempts, and recovery receipts expose accessors and mementos. Recovery history is a `NotificationRecoveryPage`; its memento retains the familiar results/hasMore fields. Delivery `getAttributes()` exposes application-selected display columns without mixing them into delivery identity. Authorize operator access before listing data.
+
+Use `getRecoveryVersion(delivery)` for an optimistic command token. `requestRecovery(id, requestKey, actorId, expectedVersion, eligibility, queueAdapter, additionalAttempts=1, actorLabel="")` checks a live eligibility callback returning `DeliveryPreparation`, records an immutable receipt, and enqueues atomically. It returns `DeliveryRecoveryResult`. Only retryable/permanent work can recover; accepted, ambiguous, suppressed, and processing work cannot. Replay returns the same receipt without another job. Limits default to five transports per request and 45 additional transports over the lifetime; configure them through `durable`.
+
+`reconcileAccepted(id, acceptance)` accepts a locally validated `{ accepted, providerReference }` receipt, including authoritative late or imported evidence. It does not resend or rewrite older attempt diagnostics. Maintenance methods include `recoverExpired`, `pruneAttempts`, and `pruneResolvedEvents`. A `beforePrune(event, deliveries)` callback receives objects after owner locks and terminal-state checks, in the same transaction, for preserving application retirement evidence. No external I/O belongs in that callback.
+
+Apply `2026_10_12_180000_add_megaphone_notification_mapping.cfc` after the existing migrations. Backfill reconstruction mappings for existing events without changing payloads, hashes, delivery IDs, or queue references. Application readers of saved RC admissions must translate their old field names into the version 1 plan shape without resolving a new audience or preferences.
+
+The unreleased `DurableNotificationService`, `DeliveryDispatcher`, and struct-returning `getNotificationSlice()` API have been replaced. Stores remain persistence implementation details; consumers use the services above. Merging, package publication, consumer installation, and deployment are separate verification steps.

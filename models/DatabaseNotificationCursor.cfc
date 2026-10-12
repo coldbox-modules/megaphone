@@ -75,6 +75,11 @@ component accessors="true" {
     }
 
     public DatabaseNotificationCursor function markAllAsRead( date readDate = now() ) {
+        variables.qb.clone().update( { "readDate": arguments.readDate } );
+        return this;
+    }
+
+    public DatabaseNotificationCursor function markAllAsReadIfUnread( date readDate = now() ) {
         variables.qb
             .clone()
             .whereNull( "readDate" )

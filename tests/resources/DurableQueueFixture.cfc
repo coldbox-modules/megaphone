@@ -7,8 +7,8 @@ component accessors="true" {
         variables.deliveries = [];
         return this;
     }
-    function enqueue( required struct delivery ) {
-        variables.deliveries.append( duplicate( arguments.delivery ) );
+    function enqueue( required any delivery ) {
+        variables.deliveries.append( arguments.delivery.getMemento() );
         if ( variables.fail ) {
             throw( type = "QueueFixtureUnavailable", message = "Queue adapter failed before commit." );
         }

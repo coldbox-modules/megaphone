@@ -1,9 +1,10 @@
 /** Durable event identity, separate from presentation history. Uses the caller's transaction. */
 component accessors="true" {
 
-    property name="properties";
+    property name="properties" type="struct" setter="false";
+    property name="uuidGenerator" inject="java:java.util.UUID";
 
-    function init( struct properties = {} ) {
+    public EventStore function init( struct properties = {} ) {
         variables.properties = arguments.properties;
         return this;
     }
@@ -15,7 +16,8 @@ component accessors="true" {
         required string type,
         required struct payload,
         required string payloadHash,
-        date createdDate = now()
+        date createdDate = now(),
+        string notificationMapping = ""
     ) {
         if (
             !len( trim( arguments.namespace ) ) || !len( trim( arguments.eventKey ) ) ||
@@ -34,11 +36,16 @@ component accessors="true" {
         };
         var values = duplicate( identity );
         values.append( {
-            "id": createObject( "java", "java.util.UUID" ).randomUUID().toString(),
+            "id": variables.uuidGenerator.randomUUID().toString(),
             "type": arguments.type,
             "payloadHash": arguments.payloadHash,
             "payload": serializeJSON( arguments.payload ),
-            "createdDate": arguments.createdDate
+            "createdDate": arguments.createdDate,
+            "notificationMapping": {
+                "value": arguments.notificationMapping,
+                "null": !len( arguments.notificationMapping ),
+                "cfsqltype": "varchar"
+            }
         } );
         newEventQuery().insertIgnore( values );
         var rows = newEventQuery()
@@ -69,12 +76,21 @@ component accessors="true" {
     }
 
     private any function newEventQuery() {
-        return newQueryBuilder()
-            .from( variables.properties.table ?: "megaphone_events" )
-            .mergeDefaultOptions( variables.properties.queryOptions ?: {} );
+        return newQueryBuilder().from( getTableName() ).mergeDefaultOptions( getQueryOptions() );
     }
 
-    private any function newQueryBuilder() provider="QueryBuilder@qb" {
+    public string function getTableName() {
+        return variables.properties.table ?: "megaphone_events";
+    }
+    public struct function getQueryOptions() {
+        var options = duplicate( variables.properties.queryOptions ?: {} );
+        if ( variables.properties.keyExists( "datasource" ) ) {
+            options.datasource = variables.properties.datasource;
+        }
+        return options;
+    }
+
+    private QueryBuilder function newQueryBuilder() provider="QueryBuilder@qb" {
     }
 
 }

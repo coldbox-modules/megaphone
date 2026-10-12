@@ -75,7 +75,7 @@ jobs:
           COLDBOX_VERSION: ${{ matrix.coldbox }}
         run: box server start cfengine=${{ matrix.cfengine }}
 
-      - name: Run TestBox Tests
+      - name: Run module activation, provider, inbox and storage regression suites
         env:
           DB_HOST: localhost
           DB_PORT: ${{ job.services.mysql.ports[3306] }}

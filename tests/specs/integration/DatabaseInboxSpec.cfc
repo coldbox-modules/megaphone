@@ -105,28 +105,28 @@ component extends="testbox.system.BaseSpec" {
                     dateAdd( "s", -1, now() )
                 );
                 store( variables.other, "foreign", "one" );
-                var first = variables.inbox.getNotificationSlice( notifiable = variables.owner, maxRows = 1 );
-                expect( first.results[ 1 ].getId() ).toBe( newest.getId() );
+                var first = variables.inbox.getNotificationsAfter( notifiable = variables.owner, maxRows = 1 );
+                expect( first.getResults()[ 1 ].getId() ).toBe( newest.getId() );
                 newest.delete();
                 store( variables.owner, "arrival", "one" );
-                var second = variables.inbox.getNotificationSlice(
+                var second = variables.inbox.getNotificationsAfter(
                     notifiable = variables.owner,
                     maxRows = 1,
-                    afterCursor = first.nextCursor
+                    afterCursor = first.getNextCursor()
                 );
-                expect( second.results[ 1 ].getId() ).toBe( middle.getId() );
-                var third = variables.inbox.getNotificationSlice(
+                expect( second.getResults()[ 1 ].getId() ).toBe( middle.getId() );
+                var third = variables.inbox.getNotificationsAfter(
                     notifiable = variables.owner,
                     maxRows = 1,
-                    afterCursor = second.nextCursor
+                    afterCursor = second.getNextCursor()
                 );
-                expect( third.results[ 1 ].getId() ).toBe( oldest.getId() );
-                expect( third.hasMore ).toBeFalse();
-                expect( third.nextCursor ).toBe( "" );
+                expect( third.getResults()[ 1 ].getId() ).toBe( oldest.getId() );
+                expect( third.hasNext() ).toBeFalse();
+                expect( third.getNextCursor() ).toBe( "" );
                 expect( function() {
-                    return variables.inbox.getNotificationSlice(
+                    return variables.inbox.getNotificationsAfter(
                         notifiable = variables.other,
-                        afterCursor = first.nextCursor
+                        afterCursor = first.getNextCursor()
                     );
                 } ).toThrow( "Megaphone.Database.InvalidCursor" );
             } );
@@ -149,20 +149,20 @@ component extends="testbox.system.BaseSpec" {
                         }
                     );
                 }
-                var first = variables.inbox.getNotificationSlice( notifiable = variables.owner, maxRows = 1 );
-                expect( first.results[ 1 ].getId() ).toBe( records[ 3 ].getId() );
-                var second = variables.inbox.getNotificationSlice(
+                var first = variables.inbox.getNotificationsAfter( notifiable = variables.owner, maxRows = 1 );
+                expect( first.getResults()[ 1 ].getId() ).toBe( records[ 3 ].getId() );
+                var second = variables.inbox.getNotificationsAfter(
                     notifiable = variables.owner,
                     maxRows = 1,
-                    afterCursor = first.nextCursor
+                    afterCursor = first.getNextCursor()
                 );
-                expect( second.results[ 1 ].getId() ).toBe( records[ 2 ].getId() );
-                var third = variables.inbox.getNotificationSlice(
+                expect( second.getResults()[ 1 ].getId() ).toBe( records[ 2 ].getId() );
+                var third = variables.inbox.getNotificationsAfter(
                     notifiable = variables.owner,
                     maxRows = 1,
-                    afterCursor = second.nextCursor
+                    afterCursor = second.getNextCursor()
                 );
-                expect( third.results[ 1 ].getId() ).toBe( records[ 1 ].getId() );
+                expect( third.getResults()[ 1 ].getId() ).toBe( records[ 1 ].getId() );
                 var tiedDate = now();
                 for ( var record in records ) {
                     queryExecute(
@@ -179,14 +179,14 @@ component extends="testbox.system.BaseSpec" {
                     .map( function( record ) {
                         return record.getId();
                     } );
-                first = variables.inbox.getNotificationSlice( notifiable = variables.owner, maxRows = 1 );
-                second = variables.inbox.getNotificationSlice(
+                first = variables.inbox.getNotificationsAfter( notifiable = variables.owner, maxRows = 1 );
+                second = variables.inbox.getNotificationsAfter(
                     notifiable = variables.owner,
                     maxRows = 1,
-                    afterCursor = first.nextCursor
+                    afterCursor = first.getNextCursor()
                 );
-                expect( first.results[ 1 ].getId() ).toBe( expected[ 1 ] );
-                expect( second.results[ 1 ].getId() ).toBe( expected[ 2 ] );
+                expect( first.getResults()[ 1 ].getId() ).toBe( expected[ 1 ] );
+                expect( second.getResults()[ 1 ].getId() ).toBe( expected[ 2 ] );
             } );
 
             it( "preserves dates and read state in idempotent imports", () => {
@@ -223,12 +223,10 @@ component extends="testbox.system.BaseSpec" {
 
             it( "keeps filtered notification handles current through read and archive transitions", () => {
                 var imported = store( variables.owner, "notice", "one" );
-                var notice = variables.inbox.getNotificationSlice(
-                    notifiable = variables.owner,
-                    archiveMode = "active",
-                    unread = true
-                ).results[ 1 ];
-                notice.markAsRead();
+                var notice = variables.inbox
+                    .getNotificationsAfter( notifiable = variables.owner, archiveMode = "active", unread = true )
+                    .getResults()[ 1 ];
+                notice.markAsReadIfUnread();
                 expect( isDate( notice.getReadDate() ) ).toBeTrue();
                 notice.archive();
                 expect( isDate( notice.getArchivedDate() ) ).toBeTrue();
@@ -253,11 +251,35 @@ component extends="testbox.system.BaseSpec" {
                 ).toBe( 1 );
             } );
 
+            it( "retains released read timestamp replacement and provides opt-in first-read preservation", () => {
+                var notice = store( variables.owner, "notice", "one" );
+                var first = dateAdd( "h", -2, now() );
+                var second = dateAdd( "h", -1, now() );
+                notice.markAsRead( first ).markAsRead( second );
+                expect( dateDiff( "s", second, notice.getReadDate() ) ).toBe( 0 );
+                var cursor = variables.inbox.getNotifications( variables.owner );
+                cursor.markAllAsRead( first ).markAllAsReadIfUnread( second );
+                expect(
+                    dateDiff(
+                        "s",
+                        first,
+                        variables.inbox.getNotification( variables.owner, notice.getId() ).getReadDate()
+                    )
+                ).toBe( 0 );
+                cursor.markAllAsRead( second );
+                expect(
+                    dateDiff(
+                        "s",
+                        second,
+                        variables.inbox.getNotification( variables.owner, notice.getId() ).getReadDate()
+                    )
+                ).toBe( 0 );
+            } );
             it( "preserves the first read and archive timestamps on repeated mutations", () => {
                 var notice = store( variables.owner, "notice", "one" );
                 var first = dateAdd( "h", -1, now() );
-                notice.markAsRead( first );
-                notice.markAsRead( now() );
+                notice.markAsReadIfUnread( first );
+                notice.markAsReadIfUnread( now() );
                 expect( dateDiff( "s", first, notice.getReadDate() ) ).toBe( 0 );
                 notice.archive( first );
                 notice.archive( now() );
@@ -294,7 +316,7 @@ component extends="testbox.system.BaseSpec" {
                     .from( "megaphone_notifications" )
                     .where( "id", { "value": notice.getId(), "cfsqltype": variables.databaseProperties.idSqlType } )
                     .update( { "groupKey": "two" } );
-                constrained.markAsRead();
+                constrained.markAsReadIfUnread();
                 expect( isDate( variables.inbox.getNotification( variables.owner, notice.getId() ).getReadDate() ) ).toBeFalse();
                 expect( variables.inbox.countUnreadNotifications( variables.owner ) ).toBe( 1 );
             } );

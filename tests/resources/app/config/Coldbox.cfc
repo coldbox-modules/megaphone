@@ -11,6 +11,12 @@ component {
     function configure() {
         moduleSettings = {
             "megaphone": {
+                "storage": {
+                    "events": { "table": "megaphone_events", "datasource": "megaphone" },
+                    "deliveries": { "table": "megaphone_deliveries", "datasource": "megaphone" },
+                    "preferences": { "table": "megaphone_preferences", "queryOptions": { "datasource": "megaphone" } },
+                    "subscriptions": { "table": "megaphone_subscriptions", "datasource": "megaphone" }
+                },
                 "channels": {
                     "database": {
                         "provider": "DatabaseProvider@megaphone",

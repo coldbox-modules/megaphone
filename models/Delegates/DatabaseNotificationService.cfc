@@ -3,14 +3,14 @@ component singleton {
     property name="wirebox" inject="wirebox";
 
     /** Keyset pages survive new arrivals and deletion of the boundary row. Existing offset APIs remain compatible. */
-    public struct function getNotificationSlice(
+    public DatabaseNotificationKeysetCursor function getNotificationsAfter(
         required any notifiable,
+        string channelName = "database",
         string afterCursor = "",
         numeric maxRows = 25,
         any constraints,
         string archiveMode = "active",
-        boolean unread = false,
-        string channelName = "database"
+        boolean unread = false
     ) {
         var source = cursor( argumentCollection = arguments );
         var provider = source.getChannel();
@@ -48,7 +48,7 @@ component singleton {
                 "recipientType": arguments.notifiable.getNotifiableType()
             } );
         }
-        return {
+        var page = {
             "results": rows.map( ( row ) => variables.wirebox
                 .getInstance( "DatabaseNotification@megaphone" )
                 .setChannel( provider )
@@ -57,60 +57,16 @@ component singleton {
             "nextCursor": nextCursor,
             "hasMore": hasMore
         };
-    }
-
-    private string function encodeCursor( required struct boundary ) {
-        return replace(
-            replace(
-                replace(
-                    toBase64( serializeJSON( arguments.boundary ), "UTF-8" ),
-                    "+",
-                    "-",
-                    "all"
-                ),
-                "/",
-                "_",
-                "all"
-            ),
-            "=",
-            "",
-            "all"
+        var nextArguments = structCopy( arguments );
+        return new megaphone.models.DatabaseNotificationKeysetCursor(
+            page.results,
+            page.nextCursor,
+            page.hasMore,
+            ( token ) => {
+                nextArguments.afterCursor = token;
+                return getNotificationsAfter( argumentCollection = nextArguments );
+            }
         );
-    }
-
-    private struct function decodeCursor( required string token, required any notifiable ) {
-        try {
-            if ( len( arguments.token ) > 1024 || !reFind( "^[A-Za-z0-9_-]+$", arguments.token ) ) {
-                throw( message = "Invalid token." );
-            }
-            var encoded = replace(
-                replace( arguments.token, "-", "+", "all" ),
-                "_",
-                "/",
-                "all"
-            );
-            while ( len( encoded ) mod 4 ) {
-                encoded &= "=";
-            }
-            var boundary = deserializeJSON( charsetEncode( binaryDecode( encoded, "base64" ), "UTF-8" ) );
-            if (
-                !isStruct( boundary ) || !isSimpleValue( boundary.id ?: [] ) || !len( boundary.id ) || len(
-                    boundary.id
-                ) > 128 || !isSimpleValue( boundary.timestamp ?: [] ) || !reFind(
-                    "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?$",
-                    boundary.timestamp
-                ) || boundary.recipientId != toString( arguments.notifiable.getNotifiableId() ) || boundary.recipientType != arguments.notifiable.getNotifiableType()
-            ) {
-                throw( message = "Invalid boundary." );
-            }
-            createObject( "java", "java.sql.Timestamp" ).valueOf( boundary.timestamp );
-            return boundary;
-        } catch ( any ignored ) {
-            throw(
-                type = "Megaphone.Database.InvalidCursor",
-                message = "The notification cursor is invalid for this recipient."
-            );
-        }
     }
 
     public DatabaseNotificationCursor function getNotifications(
@@ -298,6 +254,60 @@ component singleton {
         }
         source.whereIn( "id", ids.map( ( id ) => result.getChannel().bindIdentifier( id ) ) ).delete();
         return ids.len();
+    }
+
+    private string function encodeCursor( required struct boundary ) {
+        return replace(
+            replace(
+                replace(
+                    toBase64( serializeJSON( arguments.boundary ), "UTF-8" ),
+                    "+",
+                    "-",
+                    "all"
+                ),
+                "/",
+                "_",
+                "all"
+            ),
+            "=",
+            "",
+            "all"
+        );
+    }
+
+    private struct function decodeCursor( required string token, required any notifiable ) {
+        try {
+            if ( len( arguments.token ) > 1024 || !reFind( "^[A-Za-z0-9_-]+$", arguments.token ) ) {
+                throw( message = "Invalid token." );
+            }
+            var encoded = replace(
+                replace( arguments.token, "-", "+", "all" ),
+                "_",
+                "/",
+                "all"
+            );
+            while ( len( encoded ) mod 4 ) {
+                encoded &= "=";
+            }
+            var boundary = deserializeJSON( charsetEncode( binaryDecode( encoded, "base64" ), "UTF-8" ) );
+            if (
+                !isStruct( boundary ) || !isSimpleValue( boundary.id ?: [] ) || !len( boundary.id ) || len(
+                    boundary.id
+                ) > 128 || !isSimpleValue( boundary.timestamp ?: [] ) || !reFind(
+                    "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?$",
+                    boundary.timestamp
+                ) || boundary.recipientId != toString( arguments.notifiable.getNotifiableId() ) || boundary.recipientType != arguments.notifiable.getNotifiableType()
+            ) {
+                throw( message = "Invalid boundary." );
+            }
+            createObject( "java", "java.sql.Timestamp" ).valueOf( boundary.timestamp );
+            return boundary;
+        } catch ( any ignored ) {
+            throw(
+                type = "Megaphone.Database.InvalidCursor",
+                message = "The notification cursor is invalid for this recipient."
+            );
+        }
     }
 
     private DatabaseNotificationCursor function cursor(

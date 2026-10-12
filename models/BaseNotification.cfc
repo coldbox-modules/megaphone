@@ -16,10 +16,36 @@ component accessors="true" {
     }
 
     public BaseNotification function populate( struct properties = {} ) {
+        if ( isNull( variables.queuedProperties ) ) {
+            variables.queuedProperties = {};
+        }
+        variables.queuedProperties.append( duplicate( arguments.properties ), true );
         for ( var key in arguments.properties ) {
             variables[ key ] = arguments.properties[ key ];
         }
         return this;
+    }
+
+    public struct function getQueueProperties() {
+        return duplicate( variables.queuedProperties ?: {} );
+    }
+
+    public struct function getChannelPreferences( required any notifiable, array channelNames ) {
+        var preferences = {};
+        for (
+            var channelName in ( isNull( arguments.channelNames ) ? via( arguments.notifiable ) : arguments.channelNames )
+        ) {
+            preferences[ channelName ] = { "enabled": true, "source": "notification" };
+        }
+        return preferences;
+    }
+
+    public struct function getDeliveryContext( required any notifiable, required string channelName ) {
+        return {};
+    }
+
+    public string function getNotificationMapping() {
+        return variables.wireboxId;
     }
 
     public any function routeForType(

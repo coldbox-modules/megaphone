@@ -7,7 +7,7 @@ component extends="tests.specs.integration.DatabaseInboxSpec" {
             .map( "SubscriptionStore@megaphone" )
             .to( "megaphone.models.SubscriptionStore" );
         variables.subscriptions = variables.injector.getInstance( "SubscriptionStore@megaphone" );
-        variables.resolver = new megaphone.models.PreferenceResolver();
+        variables.resolver = new megaphone.models.PushSubscriptionService();
     }
     function run() {
         describe( "Owned browser push destinations", () => {

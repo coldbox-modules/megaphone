@@ -1,10 +1,11 @@
 /** Recipient-owned choices with application-defined scopes. Inherit is represented by no row. */
 component accessors="true" {
 
-    property name="properties";
+    property name="properties" type="struct" setter="false";
+    property name="uuidGenerator" inject="java:java.util.UUID";
     property name="resolver" inject="PreferenceResolver@megaphone";
 
-    function init( struct properties = {} ) {
+    public PreferenceStore function init( struct properties = {} ) {
         variables.properties = arguments.properties;
         return this;
     }
@@ -189,11 +190,20 @@ component accessors="true" {
         }
     }
     private any function newPreferenceQuery() {
-        return newQueryBuilder()
-            .from( variables.properties.table ?: "megaphone_preferences" )
-            .mergeDefaultOptions( variables.properties.queryOptions ?: {} );
+        return newQueryBuilder().from( getTableName() ).mergeDefaultOptions( getQueryOptions() );
     }
-    private any function newQueryBuilder() provider="QueryBuilder@qb" {
+    public string function getTableName() {
+        return variables.properties.table ?: "megaphone_preferences";
+    }
+    public struct function getQueryOptions() {
+        var options = duplicate( variables.properties.queryOptions ?: {} );
+        if ( variables.properties.keyExists( "datasource" ) ) {
+            options.datasource = variables.properties.datasource;
+        }
+        return options;
+    }
+
+    private QueryBuilder function newQueryBuilder() provider="QueryBuilder@qb" {
     }
 
 }

@@ -1,8 +1,9 @@
 /** Stable browser-registration identities. Store only encrypted subscription material supplied by a cipher adapter. */
 component accessors="true" {
 
-    property name="properties";
-    function init( struct properties = {} ) {
+    property name="properties" type="struct" setter="false";
+    property name="uuidGenerator" inject="java:java.util.UUID";
+    public SubscriptionStore function init( struct properties = {} ) {
         variables.properties = arguments.properties;
         return this;
     }
@@ -237,6 +238,44 @@ component accessors="true" {
             .map( ( row ) => row.deviceId );
     }
 
+    /** Retire expired owned destinations independently, retaining device identity and exclusions. */
+    public numeric function retireExpired( any notifiable, date clock = now(), numeric limit = 100 ) {
+        if ( arguments.limit < 1 || arguments.limit > 1000 || fix( arguments.limit ) != arguments.limit ) {
+            throw( type = "Megaphone.Push.InvalidBatch", message = "Retirement requires a batch between 1 and 1000." );
+        }
+        var query = newSubscriptionQuery()
+            .where( "active", booleanBinding( true ) )
+            .where( "expiresDate", "<=", arguments.clock );
+        if ( !isNull( arguments.notifiable ) ) {
+            var owner = recipient( arguments.notifiable );
+            query.where( "recipientType", owner.recipientType ).where( "recipientId", owner.recipientId );
+        }
+        var rows = query
+            .clone()
+            .orderBy( "expiresDate" )
+            .orderBy( "id" )
+            .limit( arguments.limit )
+            .get();
+        var retired = 0;
+        for ( var row in rows ) {
+            transaction {
+                if (
+                    query
+                        .clone()
+                        .where( "id", row.id )
+                        .lockForUpdate()
+                        .get()
+                        .isEmpty()
+                ) {
+                    continue;
+                }
+                retire( row.id );
+                retired++;
+            }
+        }
+        return retired;
+    }
+
     public numeric function pruneInactive( required date beforeDate, numeric limit = 100 ) {
         if ( arguments.limit < 1 || fix( arguments.limit ) != arguments.limit ) {
             throw( type = "Megaphone.Push.InvalidBatch", message = "Batch size must be a positive integer." );
@@ -326,19 +365,28 @@ component accessors="true" {
         return { "value": arguments.value ?: "", "null": isNull( arguments.value ), "cfsqltype": "timestamp" };
     }
     private string function uuid() {
-        return createObject( "java", "java.util.UUID" ).randomUUID().toString();
+        return variables.uuidGenerator.randomUUID().toString();
     }
     private any function newSubscriptionQuery() {
-        return newQueryBuilder()
-            .from( variables.properties.table ?: "megaphone_subscriptions" )
-            .mergeDefaultOptions( variables.properties.queryOptions ?: {} );
+        return newQueryBuilder().from( getTableName() ).mergeDefaultOptions( getQueryOptions() );
     }
     private any function newExclusionQuery() {
         return newQueryBuilder()
             .from( variables.properties.exclusionsTable ?: "megaphone_device_exclusions" )
-            .mergeDefaultOptions( variables.properties.queryOptions ?: {} );
+            .mergeDefaultOptions( getQueryOptions() );
     }
-    private any function newQueryBuilder() provider="QueryBuilder@qb" {
+    public string function getTableName() {
+        return variables.properties.table ?: "megaphone_subscriptions";
+    }
+    public struct function getQueryOptions() {
+        var options = duplicate( variables.properties.queryOptions ?: {} );
+        if ( variables.properties.keyExists( "datasource" ) ) {
+            options.datasource = variables.properties.datasource;
+        }
+        return options;
+    }
+
+    private QueryBuilder function newQueryBuilder() provider="QueryBuilder@qb" {
     }
 
 }

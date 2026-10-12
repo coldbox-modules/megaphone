@@ -45,6 +45,12 @@ component accessors="true" {
     }
 
     public DatabaseNotification function markAsRead( date readDate = now() ) {
+        ownedQuery().update( { "readDate": arguments.readDate } );
+        refreshOwnedState();
+        return this;
+    }
+
+    public DatabaseNotification function markAsReadIfUnread( date readDate = now() ) {
         ownedQuery().whereNull( "readDate" ).update( { "readDate": arguments.readDate } );
         refreshOwnedState();
         return this;
