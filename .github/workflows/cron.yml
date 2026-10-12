@@ -13,6 +13,7 @@ jobs:
       matrix:
         cfengine: ["lucee@5", "lucee@6", "lucee@be", "adobe@2021", "adobe@2023.0.06", "adobe@be"]
         coldbox: ["coldbox@6", "coldbox@7", "coldbox@be"]
+        # Durable database/provider activation runs on both JVMs; Web Push SDK suites require Java 11.
         javaVersion: ["openjdk8", "openjdk11"]
     services:
       mysql:

@@ -10,6 +10,11 @@ component extends="tests.specs.integration.NotificationQueueSpec" {
         variables.subscriptions = variables.injector.getInstance( "PushSubscriptionService@megaphone" );
     }
     function run() {
+        if ( val( createObject( "java", "java.lang.System" ).getProperty( "java.specification.version" ) ) < 11 ) {
+            xdescribe( "Registered Web Push requires Java 11", () => {
+            } );
+            return;
+        }
         describe( "Registered Web Push provider and sealed subscription service", () => {
             beforeEach( () => {
                 variables.owner = new tests.resources.InboxRecipient();
