@@ -45,7 +45,7 @@ component accessors="true" {
     }
 
     public string function getNotificationMapping() {
-        return variables.wireboxId;
+        return isNull( variables.wireboxId ) ? getMetadata( this ).name : variables.wireboxId;
     }
 
     public any function routeForType(
@@ -69,7 +69,7 @@ component accessors="true" {
     }
 
     public string function getNotificationType() {
-        return variables.wireboxId;
+        return isNull( variables.wireboxId ) ? getMetadata( this ).name : variables.wireboxId;
     }
 
     private Str function str() provider="Str@Str" {

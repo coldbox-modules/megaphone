@@ -29,7 +29,11 @@ component singleton {
             );
         }
         if ( isArray( arguments.value ) ) {
-            return "[" & arguments.value.map( ( value ) => canonical( value ) ).toList( "," ) & "]";
+            var entries = [];
+            for ( var index = 1; index <= arrayLen( arguments.value ); index++ ) {
+                entries.append( isNull( arguments.value[ index ] ) ? "null" : canonical( arguments.value[ index ] ) );
+            }
+            return "[" & entries.toList( "," ) & "]";
         }
         if ( isStruct( arguments.value ) ) {
             var keys = structKeyArray( arguments.value );

@@ -107,6 +107,24 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                         .getCreated()
                 ).toBeTrue();
             } );
+            it( "reconstructs a directly constructed notification instance", () => {
+                var notification = new tests.resources.QueueNotification().populate( { "message": "constructed" } );
+                var publication = variables.service.queue(
+                    variables.owner,
+                    notification,
+                    {},
+                    variables.options
+                );
+                var id = publication.getDeliveries()[ 1 ].getId();
+                expect( variables.deliveries.dispatch( id ).getStatus() ).toBe( "accepted" );
+                expect(
+                    getWireBox()
+                        .getInstance( "DatabaseNotificationService@megaphone" )
+                        .getNotification( variables.owner, id )
+                        .getData()
+                        .message
+                ).toBe( "constructed" );
+            } );
             it( "accepts populated notification instances and preserves two provider instances", () => {
                 variables.service.registerChannels( {
                     "one": { "provider": "DatabaseProvider@megaphone", "properties": {} },
@@ -186,6 +204,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                 ) ).toThrow( "Megaphone.Notification.InvalidSnapshot" );
                 var hasher = getWireBox().getInstance( "NotificationSnapshotHasher@megaphone" );
                 expect( hasher.digest( { "a": 1, "b": 2 } ) ).toBe( hasher.digest( { "b": 2, "a": 1 } ) );
+                expect( serializeJSON( hasher.snapshot( deserializeJSON( "[null]" ) ) ) ).toBe( "[null]" );
                 expect( hasher.digest( [ 1, 2 ] ) ).notToBe( hasher.digest( [ 2, 1 ] ) );
             } );
             it( "holds current authorization before transport and preserves the send budget", () => {

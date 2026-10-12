@@ -28,7 +28,15 @@ component singleton {
         return variables.store.registrations( argumentCollection = arguments );
     }
     public any function getActiveRegistration( required any notifiable, required string id, date clock = now() ) {
-        return variables.store.activeRegistration( argumentCollection = arguments );
+        var row = variables.store.activeRegistration( argumentCollection = arguments );
+        if ( isNull( row ) ) {
+            return;
+        }
+        row.notifiableType = row.recipientType;
+        row.notifiableId = row.recipientId;
+        structDelete( row, "recipientType" );
+        structDelete( row, "recipientId" );
+        return row;
     }
     public boolean function rename( required any notifiable, required string id, required string label ) {
         return variables.store.rename( argumentCollection = arguments );

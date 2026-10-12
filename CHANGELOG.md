@@ -30,7 +30,7 @@ Installing the module doesn't import your existing history, preferences, or pend
 
 ## Validation
 
-Local API alignment checks passed: 205 module regressions on MySQL with four existing ColdBox 6 skips; 59 PostgreSQL checks; module migration rollback/reapplication; 212 focused CommuniArts checks across 41 bundles; and 1,143 Vitest checks. Clean installation, an upgrade with existing RC notification data, and repeated migrations were verified in disposable databases. Formatting and artifact inspection passed. Earlier candidate engine-matrix results do not validate this refactor. Hosted CI, browser matrices, real-provider/device checks, publication, and deployment remain deferred.
+Local API alignment checks passed: 206 module regressions on MySQL with four existing ColdBox 6 skips; 59 PostgreSQL checks; module migration rollback/reapplication; 212 focused CommuniArts checks across 41 bundles; and 1,143 Vitest checks. Clean installation, an upgrade with existing RC notification data, and repeated migrations were verified in disposable databases. Formatting and artifact inspection passed. Earlier candidate engine-matrix results do not validate this refactor. Hosted CI, browser matrices, real-provider/device checks, publication, and deployment remain deferred.
 
 # v1.0.4
 ## 19 Apr 2024 — 16:28:17 UTC
