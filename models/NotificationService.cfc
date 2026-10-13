@@ -307,8 +307,8 @@ component singleton accessors="true" {
         if ( !structKeyExists( server, "boxlang" ) || !structKeyExists( arguments.notification, "$wbInjector" ) ) {
             return duplicate( arguments.notification );
         }
-        // Defer this fixed expression to BoxLang; Adobe validates duplicate() argument counts at compile time.
-        var staged = evaluate( "duplicate( arguments.notification, false )" );
+        // Invoke dynamically because Adobe validates duplicate() argument counts even in this BoxLang-only branch.
+        var staged = invoke( "", "duplicate", [ arguments.notification, false ] );
         var injector = staged.$wbInjector;
         structDelete( staged, "$wbInjector" );
         var scopes = { "variables": staged.getVariablesMixin(), "this": staged };
