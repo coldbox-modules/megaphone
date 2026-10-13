@@ -126,6 +126,18 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                 expect( variables.deliveries.getDueDeliveries() ).toBeEmpty();
                 expect( jobs().recordCount ).toBe( 0 );
             } );
+            it( "rejects a synchronous cbq connection before transport or publication", () => {
+                variables.config.registerConnection( name = "notification-sync", provider = "SyncProvider@cbq" );
+                variables.settings.durable.queueConnection = "notification-sync";
+                expect( () => variables.service.queue(
+                    variables.owner,
+                    "QueueNotification",
+                    {},
+                    variables.options
+                ) ).toThrow( "Megaphone.Configuration.InvalidQueueProvider" );
+                expect( variables.deliveries.getDueDeliveries() ).toBeEmpty();
+                expect( jobs().recordCount ).toBe( 0 );
+            } );
             it( "supports a renamed queue and connection", () => {
                 variables.config.registerConnection(
                     name = "notification-test",

@@ -8,6 +8,15 @@ component singleton {
         if ( !listFind( "queued,retryable,processing", arguments.delivery.getState() ) ) {
             return;
         }
+        var connection = variables.wirebox
+            .getInstance( "Config@cbq" )
+            .getConnection( variables.settings.durable.queueConnection );
+        if ( !isInstanceOf( connection.getProvider(), "cbq.models.Providers.DBProvider" ) ) {
+            throw(
+                type = "Megaphone.Configuration.InvalidQueueProvider",
+                message = "The bundled notification queue requires cbq's database provider so job insertion joins publication's transaction."
+            );
+        }
         var availableDate = arguments.delivery.getAvailableDate();
         if ( arguments.delivery.getState() == "processing" ) {
             availableDate = arguments.delivery.getLeaseUntil();
