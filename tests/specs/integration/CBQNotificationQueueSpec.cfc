@@ -61,6 +61,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                 ).toBe( "megaphone" );
                 expect( variables.config.getWorkerPools() ).toBeEmpty();
                 expect( getWireBox().getInstance( "CBQNotificationQueue@megaphone" ) ).toBeInstanceOf( "megaphone.models.CBQNotificationQueue" );
+                expect( getWireBox().getInstance( "CBQNotificationQueue@megaphone" ) ).toBeInstanceOf( "megaphone.models.Interfaces.INotificationQueue" );
             } );
             it( "queues only a delivery ID and runs the serialized job idempotently", () => {
                 var publication = variables.service.queue(

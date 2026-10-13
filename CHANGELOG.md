@@ -16,6 +16,8 @@
 
 ## API alignment
 
+- The cbq notification adapter implements `INotificationQueue`, including optional connection and queue overrides.
+
 - Model instances and push collaborators use WireBox method providers; application overrides keep their constructor dependencies when captured data is configured.
 
 - NotificationPlan defaults its event and deliveries to empty values, so saved plans can be restored with a no-argument constructor.

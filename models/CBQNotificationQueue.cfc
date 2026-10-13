@@ -1,5 +1,5 @@
 /** cbq carries delivery references; Megaphone owns transport attempts and outcomes. */
-component singleton {
+component singleton implements="megaphone.models.Interfaces.INotificationQueue" {
 
     property name="settings" inject="coldbox:moduleSettings:megaphone";
     property name="wirebox" inject="wirebox";
