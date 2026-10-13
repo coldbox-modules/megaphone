@@ -1,4 +1,4 @@
-component extends="megaphone.models.NotificationEvent" {
+component extends="megaphone.models.Delivery.NotificationEvent" {
 
     /** Captures an application constructor dependency before data is configured. */
     public MappedNotificationEvent function init( required string marker ) {

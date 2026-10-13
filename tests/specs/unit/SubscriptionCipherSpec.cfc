@@ -4,7 +4,7 @@ component extends="testbox.system.BaseSpec" {
         describe( "Sealed subscription material", () => {
             beforeEach( () => {
                 variables.key = binaryEncode( binaryDecode( repeatString( "01", 32 ), "hex" ), "base64" );
-                variables.cipher = new megaphone.models.SubscriptionCipher(
+                variables.cipher = new megaphone.models.WebPush.SubscriptionCipher(
                     activeKeyId = "one",
                     keys = { "one": variables.key }
                 );
@@ -49,22 +49,25 @@ component extends="testbox.system.BaseSpec" {
             it( "reads a retained old key while new subscriptions use the active rotation key", () => {
                 var sealed = variables.cipher.seal( variables.subscription, variables.context );
                 var nextKey = binaryEncode( binaryDecode( repeatString( "02", 32 ), "hex" ), "base64" );
-                var rotated = new megaphone.models.SubscriptionCipher(
+                var rotated = new megaphone.models.WebPush.SubscriptionCipher(
                     activeKeyId = "two",
                     keys = { "one": variables.key, "two": nextKey }
                 );
                 expect( rotated.unseal( sealed, variables.context ).keys.auth ).toBe( "test-auth" );
                 expect( deserializeJSON( rotated.seal( variables.subscription, variables.context ) ).keyId ).toBe( "two" );
-                var dropped = new megaphone.models.SubscriptionCipher( activeKeyId = "two", keys = { "two": nextKey } );
+                var dropped = new megaphone.models.WebPush.SubscriptionCipher(
+                    activeKeyId = "two",
+                    keys = { "two": nextKey }
+                );
                 expect( () => dropped.unseal( sealed, variables.context ) ).toThrow(
                     type = "Megaphone.Push.InvalidSealedData"
                 );
             } );
             it( "rejects invalid configuration and empty ownership context", () => {
-                expect( () => new megaphone.models.SubscriptionCipher( activeKeyId = "missing", keys = {} ) ).toThrow(
+                expect( () => new megaphone.models.WebPush.SubscriptionCipher( activeKeyId = "missing", keys = {} ) ).toThrow(
                     type = "Megaphone.Push.MissingStorageKey"
                 );
-                expect( () => new megaphone.models.SubscriptionCipher( activeKeyId = "one", keys = { "one": "short" } ) ).toThrow(
+                expect( () => new megaphone.models.WebPush.SubscriptionCipher( activeKeyId = "one", keys = { "one": "short" } ) ).toThrow(
                     type = "Megaphone.Push.InvalidStorageKey"
                 );
                 expect( () => variables.cipher.seal( variables.subscription, "" ) ).toThrow(

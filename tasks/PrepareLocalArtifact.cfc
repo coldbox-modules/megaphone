@@ -46,12 +46,12 @@ component {
             var required in [
                 "box.json",
                 "ModuleConfig.cfc",
-                "models/DeliveryStore.cfc",
+                "models/Storage/DeliveryStore.cfc",
                 "models/NotificationService.cfc",
-                "models/NotificationDeliveryService.cfc",
-                "models/NotificationPlan.cfc",
-                "models/CBQNotificationQueue.cfc",
-                "models/NotificationDeliveryJob.cfc",
+                "models/Delivery/NotificationDeliveryService.cfc",
+                "models/Delivery/NotificationPlan.cfc",
+                "models/Queue/CBQNotificationQueue.cfc",
+                "models/Queue/NotificationDeliveryJob.cfc",
                 "models/Providers/WebPushProvider.cfc",
                 "models/Delegates/DatabaseNotificationService.cfc",
                 "resources/java/webpush-LICENSE.txt",
@@ -65,6 +65,18 @@ component {
         for ( var name in names ) {
             if ( reFindNoCase( "(^|/)(tests|testbox|modules|\.git|\.tmp)/|\.jar$|(^|/)\.env$|^server[^/]*\.json$", name ) ) {
                 throw( message = "Artifact contains an excluded development/dependency file: " & name );
+            }
+        }
+        var modelNames = {};
+        for ( var name in names ) {
+            if ( left( name, 7 ) == "models/" && listLast( name, "." ) == "cfc" ) {
+                var modelName = listFirst( listLast( name, "/" ), "." );
+                if ( structKeyExists( modelNames, modelName ) ) {
+                    throw(
+                        message = "Artifact contains duplicate WireBox model names: " & modelNames[ modelName ] & " and " & name
+                    );
+                }
+                modelNames[ modelName ] = name;
             }
         }
         var descriptor = deserializeJSON( fileRead( root & "/box.json" ) );

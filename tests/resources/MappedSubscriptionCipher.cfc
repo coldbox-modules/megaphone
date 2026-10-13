@@ -1,4 +1,4 @@
-component extends="megaphone.models.SubscriptionCipher" {
+component extends="megaphone.models.WebPush.SubscriptionCipher" {
 
     /** Captures an application constructor dependency before data is configured. */
     public MappedSubscriptionCipher function init( required string marker ) {

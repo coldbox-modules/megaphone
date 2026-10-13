@@ -238,7 +238,7 @@ component singleton {
                 .getInstance( "NotificationService@megaphone" )
                 .getChannel( work.getChannelName() );
             prepared = channel.prepareDelivery( notifiable, notification, work );
-            if ( !isInstanceOf( prepared, "megaphone.models.DeliveryPreparation" ) ) {
+            if ( !isInstanceOf( prepared, "megaphone.models.Delivery.DeliveryPreparation" ) ) {
                 throw(
                     type = "Megaphone.Delivery.InvalidPreparation",
                     message = "Providers must return a DeliveryPreparation."
@@ -285,7 +285,7 @@ component singleton {
         try {
             outcome = channel.sendDelivery( prepared, work );
             if (
-                !isInstanceOf( outcome, "megaphone.models.DeliveryResult" ) || !listFind(
+                !isInstanceOf( outcome, "megaphone.models.Delivery.DeliveryResult" ) || !listFind(
                     "accepted,retryable,permanent,ambiguous",
                     outcome.getStatus()
                 )
@@ -333,7 +333,9 @@ component singleton {
                         return newDeliveryRecoveryResult().configure( { "status": "conflict" } );
                     }
                     var ready = arguments.eligibility( work );
-                    if ( !isInstanceOf( ready, "megaphone.models.DeliveryPreparation" ) || ready.getStatus() != "ready" ) {
+                    if (
+                        !isInstanceOf( ready, "megaphone.models.Delivery.DeliveryPreparation" ) || ready.getStatus() != "ready"
+                    ) {
                         return newDeliveryRecoveryResult().configure( { "status": "ineligible" } );
                     }
                 }
@@ -424,7 +426,7 @@ component singleton {
         }
         var ready = policy.check( arguments.work, arguments.notifiable, arguments.event );
         if (
-            !isInstanceOf( ready, "megaphone.models.DeliveryPreparation" ) || !listFind(
+            !isInstanceOf( ready, "megaphone.models.Delivery.DeliveryPreparation" ) || !listFind(
                 "ready,suppressed,deferred,permanent",
                 ready.getStatus()
             )

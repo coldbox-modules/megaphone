@@ -10,7 +10,7 @@ component accessors="true" implements="megaphone.models.Interfaces.INotification
     }
     /** Implements the same typed queue contract as an application adapter. */
     public void function enqueue(
-        required megaphone.models.NotificationDelivery delivery,
+        required megaphone.models.Delivery.NotificationDelivery delivery,
         string connection,
         string queue
     ) {

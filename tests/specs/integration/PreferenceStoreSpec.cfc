@@ -5,11 +5,11 @@ component extends="tests.specs.integration.DatabaseInboxSpec" {
         variables.injector
             .getBinder()
             .map( "PreferenceResolver@megaphone" )
-            .to( "megaphone.models.PreferenceResolver" );
+            .to( "megaphone.models.Preferences.PreferenceResolver" );
         variables.injector
             .getBinder()
             .map( "PreferenceStore@megaphone" )
-            .to( "megaphone.models.PreferenceStore" );
+            .to( "megaphone.models.Storage.PreferenceStore" );
         variables.preferences = variables.injector.getInstance( "PreferenceStore@megaphone" );
     }
     function run() {

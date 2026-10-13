@@ -5,7 +5,7 @@ component extends="tests.specs.integration.DatabaseInboxSpec" {
         variables.injector
             .getBinder()
             .map( "EventStore@megaphone" )
-            .to( "megaphone.models.EventStore" );
+            .to( "megaphone.models.Storage.EventStore" );
         variables.events = variables.injector.getInstance( "EventStore@megaphone" );
     }
 

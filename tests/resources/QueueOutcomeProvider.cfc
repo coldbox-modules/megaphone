@@ -12,14 +12,17 @@ component extends="megaphone.models.Providers.BaseProvider" {
     ) {
         return arguments.notification;
     }
-    public megaphone.models.DeliveryPreparation function prepareDelivery(
+    public megaphone.models.Delivery.DeliveryPreparation function prepareDelivery(
         required any notifiable,
         required any notification,
         required any delivery
     ) {
         return newDeliveryPreparation();
     }
-    public megaphone.models.DeliveryResult function sendDelivery( required any prepared, required any delivery ) {
+    public megaphone.models.Delivery.DeliveryResult function sendDelivery(
+        required any prepared,
+        required any delivery
+    ) {
         variables.sendCount++;
         if ( variables.outcome == "throw" ) {
             throw( type = "QueueTransportUnknown", message = "Unknown acceptance" );
@@ -34,13 +37,13 @@ component extends="megaphone.models.Providers.BaseProvider" {
     }
 
     /** Supplies a fresh DeliveryPreparation through WireBox. */
-    private megaphone.models.DeliveryPreparation function newDeliveryPreparation()
+    private megaphone.models.Delivery.DeliveryPreparation function newDeliveryPreparation()
         provider="DeliveryPreparation@megaphone"
     {
     }
 
     /** Supplies a fresh DeliveryResult through WireBox. */
-    private megaphone.models.DeliveryResult function newDeliveryResult() provider="DeliveryResult@megaphone" {
+    private megaphone.models.Delivery.DeliveryResult function newDeliveryResult() provider="DeliveryResult@megaphone" {
     }
 
 }

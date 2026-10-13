@@ -433,7 +433,7 @@ publication.getDeliveries()[1].getId();
 
 Options are `namespace` (default `megaphone`), `eventKey` (generated if omitted), `version` (1), `occurredAt` and `availableDate` (now), and optional `admitAfter`. Occurrences older than the cutoff return an expired publication without recording work. Equality is admitted.
 
-Persist `plan.getMemento()` when admission must precede worker handoff. Restore it with `new megaphone.models.NotificationPlan().populateFromMemento(saved)` and call `queuePlan(plan)`. Its version 1 memento contains `event`, `deliveries`, and optional `admitAfter` and `queueOptions`. The latter retains explicit `connection` and `queue` choices for handoff. It preserves identities, payloads, hashes, destinations, and channel choices. A trusted producer may use `queuePlan(plan, alreadyAdmitted=true)` after validating its original persisted admission. This bypasses the replay cutoff; it does not replan the audience.
+Persist `plan.getMemento()` when admission must precede worker handoff. Restore it using a `NotificationPlan@megaphone` method provider followed by `.populateFromMemento(saved)` and call `queuePlan(plan)`. Its version 1 memento contains `event`, `deliveries`, and optional `admitAfter` and `queueOptions`. The latter retains explicit `connection` and `queue` choices for handoff. It preserves identities, payloads, hashes, destinations, and channel choices. A trusted producer may use `queuePlan(plan, alreadyAdmitted=true)` after validating its original persisted admission. This bypasses the replay cutoff; it does not replan the audience.
 
 Notifications extend `BaseNotification`, implement `via(notifiable)` and the usual `to{Provider}` methods, and may override `getChannelPreferences(notifiable)` to return a channel-name map of `{ enabled, source }`. The default enables the channels returned by `via()`. Synchronous delivery skips disabled channels. Durable delivery records them as suppressed; later opt-in does not revive them.
 
@@ -529,3 +529,18 @@ Use `getRecoveryVersion(delivery)` for an optimistic command token. `requestReco
 Apply `2026_10_12_180000_add_megaphone_notification_mapping.cfc` after the existing migrations. Backfill reconstruction mappings for existing events without changing payloads, hashes, delivery IDs, or queue references. Application readers of saved RC admissions must translate their old field names into the version 1 plan shape without resolving a new audience or preferences.
 
 The unreleased `DurableNotificationService`, `DeliveryDispatcher`, and struct-returning `getNotificationSlice()` API have been replaced. Stores remain persistence implementation details; consumers use the services above. Merging, package publication, consumer installation, and deployment are separate verification steps.
+
+## Model layout
+
+The core notification service, base notification, and inbox models live at the root of `models`. Related classes are grouped by their role:
+
+| Folder | Contents |
+| --- | --- |
+| `Delivery` | Plans, events, publications, delivery operations, results, and recovery history |
+| `Queue` | The cbq adapter and delivery job |
+| `Storage` | Event, delivery, preference, and subscription stores |
+| `Preferences` | Preference resolution and the preference service |
+| `WebPush` | Subscription registration, encryption, SDK loading, and HTTP transport |
+| `Providers`, `Delegates`, `Interfaces` | Notification channels, notifiable delegates, and extension contracts |
+
+WireBox names such as `NotificationPlan@megaphone` and `WebPushRuntime@megaphone` stay the same. Prefer those mappings when creating or overriding module objects.

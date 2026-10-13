@@ -5,9 +5,9 @@ component extends="tests.specs.integration.DatabaseInboxSpec" {
         variables.injector
             .getBinder()
             .map( "SubscriptionStore@megaphone" )
-            .to( "megaphone.models.SubscriptionStore" );
+            .to( "megaphone.models.Storage.SubscriptionStore" );
         variables.subscriptions = variables.injector.getInstance( "SubscriptionStore@megaphone" );
-        variables.resolver = new megaphone.models.PushSubscriptionService();
+        variables.resolver = new megaphone.models.WebPush.PushSubscriptionService();
     }
     function run() {
         describe( "Owned browser push destinations", () => {

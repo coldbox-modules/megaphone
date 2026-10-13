@@ -3,7 +3,7 @@ component extends="testbox.system.BaseSpec" {
     function run() {
         describe( "Ordered channel preferences", () => {
             beforeEach( () => {
-                variables.resolver = new megaphone.models.PreferenceResolver();
+                variables.resolver = new megaphone.models.Preferences.PreferenceResolver();
                 variables.defaults = { "database": true, "email": false, "push": false };
             } );
 
@@ -47,14 +47,14 @@ component extends="testbox.system.BaseSpec" {
                     { "id": "old", "active": false }
                 ];
                 expect(
-                    new megaphone.models.PushSubscriptionService()
+                    new megaphone.models.WebPush.PushSubscriptionService()
                         .selectDevices( devices, [ "phone" ] )
                         .map( ( device ) => device.id )
                 ).toBe( [ "laptop" ] );
                 devices.append( { "id": "tablet", "active": true } );
                 devices.append( { "id": "laptop", "active": true } );
                 expect(
-                    new megaphone.models.PushSubscriptionService()
+                    new megaphone.models.WebPush.PushSubscriptionService()
                         .selectDevices( devices, [ "phone" ] )
                         .map( ( device ) => device.id )
                 ).toBe( [ "laptop", "tablet" ] );

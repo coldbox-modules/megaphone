@@ -61,7 +61,7 @@ component {
             }
             binder
                 .map( stores[ key ] & "@megaphone" )
-                .to( moduleMapping & ".models." & stores[ key ] )
+                .to( moduleMapping & ".models.Storage." & stores[ key ] )
                 .initArg( name = "properties", value = properties );
         }
         variables.wirebox.getInstance( "NotificationService@megaphone" ).registerChannels( settings.channels ?: {} );

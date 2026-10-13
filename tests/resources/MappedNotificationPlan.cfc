@@ -1,4 +1,4 @@
-component extends="megaphone.models.NotificationPlan" {
+component extends="megaphone.models.Delivery.NotificationPlan" {
 
     /** Captures an application constructor dependency before data is configured. */
     public MappedNotificationPlan function init( required string marker ) {

@@ -5,7 +5,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
         variables.injector
             .getBinder()
             .map( "DeliveryStore@megaphone" )
-            .to( "megaphone.models.DeliveryStore" );
+            .to( "megaphone.models.Storage.DeliveryStore" );
         variables.deliveries = variables.injector.getInstance( "DeliveryStore@megaphone" );
         variables.injector
             .getBinder()
@@ -14,7 +14,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
         variables.injector
             .getBinder()
             .map( "NotificationDeliveryService@megaphone" )
-            .to( "megaphone.models.NotificationDeliveryService" );
+            .to( "megaphone.models.Delivery.NotificationDeliveryService" );
         for (
             var name in [
                 "NotificationEvent",
@@ -31,7 +31,7 @@ component extends="tests.specs.integration.EventStoreSpec" {
             variables.injector
                 .getBinder()
                 .map( name & "@megaphone" )
-                .to( "megaphone.models." & name );
+                .to( "megaphone.models.Delivery." & name );
         }
         variables.operations = variables.injector.getInstance( "NotificationDeliveryService@megaphone" );
     }
@@ -744,7 +744,9 @@ component extends="tests.specs.integration.EventStoreSpec" {
     ) {
         var values = structCopy( arguments );
         var callback = arguments.eligibility;
-        values.eligibility = ( work ) => new megaphone.models.DeliveryPreparation( callback( work.getMemento() ) );
+        values.eligibility = ( work ) => new megaphone.models.Delivery.DeliveryPreparation(
+            callback( work.getMemento() )
+        );
         var result = variables.operations.requestRecovery( argumentCollection = values ).getMemento();
         return result;
     }

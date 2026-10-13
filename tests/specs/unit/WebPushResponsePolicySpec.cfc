@@ -3,7 +3,7 @@ component extends="testbox.system.BaseSpec" {
     function run() {
         describe( "Web push response outcomes", () => {
             beforeEach( () => {
-                variables.policy = new megaphone.models.WebPushResponsePolicy();
+                variables.policy = new megaphone.models.WebPush.WebPushResponsePolicy();
                 variables.clock = parseDateTime( "2026-10-05T12:00:00Z" );
             } );
             it( "records provider acceptance without claiming user delivery", () => {

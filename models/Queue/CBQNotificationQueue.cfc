@@ -9,7 +9,7 @@ component singleton implements="megaphone.models.Interfaces.INotificationQueue" 
      * Enqueues a delivery-ID job on the selected registered cbq connection and queue.
      */
     public void function enqueue(
-        required megaphone.models.NotificationDelivery delivery,
+        required megaphone.models.Delivery.NotificationDelivery delivery,
         string connection,
         string queue
     ) {

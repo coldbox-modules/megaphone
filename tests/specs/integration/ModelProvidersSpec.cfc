@@ -17,7 +17,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                     getWireBox()
                         .getBinder()
                         .map( name & "@megaphone" )
-                        .to( "megaphone.models." & name );
+                        .to( "megaphone.models." & ( name == "SubscriptionCipher" ? "WebPush." : "Delivery." ) & name );
                 }
             } );
             it( "preserves injected constructors while planning and wrapping saved events", () => {

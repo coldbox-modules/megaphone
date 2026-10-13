@@ -16,6 +16,8 @@
 
 ## API alignment
 
+- Grouped delivery, queue, storage, preference, and Web Push models into dedicated folders while retaining the existing WireBox names.
+
 - The cbq notification adapter implements `INotificationQueue`, including optional connection and queue overrides.
 
 - Model instances and push collaborators use WireBox method providers; application overrides keep their constructor dependencies when captured data is configured.

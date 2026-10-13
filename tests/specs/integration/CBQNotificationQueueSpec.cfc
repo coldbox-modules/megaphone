@@ -60,7 +60,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                         .datasource
                 ).toBe( "megaphone" );
                 expect( variables.config.getWorkerPools() ).toBeEmpty();
-                expect( getWireBox().getInstance( "CBQNotificationQueue@megaphone" ) ).toBeInstanceOf( "megaphone.models.CBQNotificationQueue" );
+                expect( getWireBox().getInstance( "CBQNotificationQueue@megaphone" ) ).toBeInstanceOf( "megaphone.models.Queue.CBQNotificationQueue" );
                 expect( getWireBox().getInstance( "CBQNotificationQueue@megaphone" ) ).toBeInstanceOf( "megaphone.models.Interfaces.INotificationQueue" );
             } );
             it( "queues only a delivery ID and runs the serialized job idempotently", () => {
@@ -73,6 +73,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                 var rows = jobs();
                 expect( rows.recordCount ).toBe( 1 );
                 var payload = deserializeJSON( rows.payload[ 1 ] );
+                expect( payload.mapping ).toBe( "NotificationDeliveryJob@megaphone" );
                 expect( payload.properties.keyArray() ).toBe( [ "deliveryId" ] );
                 expect( payload.properties.deliveryId ).toBe( publication.getDeliveries()[ 1 ].getId() );
                 expect( payload.maxAttempts ).toBe( 1 );

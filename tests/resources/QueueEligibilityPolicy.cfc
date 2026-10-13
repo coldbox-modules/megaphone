@@ -6,7 +6,7 @@ component singleton accessors="true" {
     }
 
     /** Supplies a fresh DeliveryPreparation through WireBox. */
-    private megaphone.models.DeliveryPreparation function newDeliveryPreparation()
+    private megaphone.models.Delivery.DeliveryPreparation function newDeliveryPreparation()
         provider="DeliveryPreparation@megaphone"
     {
     }

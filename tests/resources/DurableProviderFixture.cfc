@@ -22,13 +22,13 @@ component extends="megaphone.models.Providers.BaseProvider" accessors="true" {
     }
 
     /** Supplies a fresh DeliveryPreparation through WireBox. */
-    private megaphone.models.DeliveryPreparation function newDeliveryPreparation()
+    private megaphone.models.Delivery.DeliveryPreparation function newDeliveryPreparation()
         provider="DeliveryPreparation@megaphone"
     {
     }
 
     /** Supplies a fresh DeliveryResult through WireBox. */
-    private megaphone.models.DeliveryResult function newDeliveryResult() provider="DeliveryResult@megaphone" {
+    private megaphone.models.Delivery.DeliveryResult function newDeliveryResult() provider="DeliveryResult@megaphone" {
     }
 
 }
