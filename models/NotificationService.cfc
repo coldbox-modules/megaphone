@@ -307,7 +307,8 @@ component singleton accessors="true" {
         if ( !structKeyExists( server, "boxlang" ) || !structKeyExists( arguments.notification, "$wbInjector" ) ) {
             return duplicate( arguments.notification );
         }
-        var staged = duplicate( arguments.notification, false );
+        // Adobe validates built-in argument counts even in this BoxLang-only branch.
+        var staged = duplicate( argumentCollection = { "object": arguments.notification, "deep": false } );
         var injector = staged.$wbInjector;
         structDelete( staged, "$wbInjector" );
         var scopes = { "variables": staged.getVariablesMixin(), "this": staged };
