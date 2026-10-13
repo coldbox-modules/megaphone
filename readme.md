@@ -4,7 +4,7 @@
 
 ## Requirements
 
-Megaphone requires JDK 11 or newer, ColdBox 6+, and Adobe ColdFusion 2021+ or Lucee 5+. Use a Java version supported by your engine when it needs a newer JDK. CI selects Java per engine: 11 for Lucee 5/6 and Adobe 2021, 17 for Adobe 2023, and 21 for the scheduled bleeding-edge engines.
+Megaphone requires JDK 11 or newer, ColdBox 6+, and Adobe ColdFusion 2021+ or Lucee 5+. Use a Java version supported by your engine when it needs a newer JDK. CI selects Java per engine: 11 for Lucee 5/6 and Adobe 2021, 17 for Adobe 2023, and 21 for BoxLang and the scheduled bleeding-edge engines. BoxLang runs in both native and CFML compatibility modes with ColdBox 8; the scheduled matrix also covers both modes on bleeding-edge BoxLang and ColdBox.
 
 ## Documentation
 Installation: `box install megaphone`

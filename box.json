@@ -55,6 +55,6 @@
         "resources/java/webpush/box.json",
         "test",
         "tests",
-        "server.json"
+        "server*.json"
     ]
 }

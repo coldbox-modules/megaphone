@@ -13,13 +13,23 @@ component extends="tests.resources.ModuleIntegrationSpec" {
             .to( "tests.resources.QueueEligibilityPolicy" )
             .asSingleton();
         var settings = getController().getSetting( "moduleSettings" ).megaphone;
+        variables.savedQueueSettings = duplicate( settings.queue );
         settings.queue.notifiableResolver = "QueueNotifiableResolver";
         settings.queue.eligibilityPolicy = "QueueEligibilityPolicy";
         variables.service = getWireBox().getInstance( "NotificationService@megaphone" );
+        variables.savedChannels = structCopy( variables.service.getChannels() );
         variables.deliveries = getWireBox().getInstance( "NotificationDeliveryService@megaphone" );
         variables.resolver = getWireBox().getInstance( "QueueNotifiableResolver" );
         variables.policy = getWireBox().getInstance( "QueueEligibilityPolicy" );
     }
+
+    /** Restores module queue settings so this bundle does not change later bundles' startup assertions. */
+    public void function afterAll() {
+        getController().getSetting( "moduleSettings" ).megaphone.queue = variables.savedQueueSettings;
+        variables.service.setChannels( variables.savedChannels );
+        super.afterAll();
+    }
+
     function run() {
         describe( "Megaphone notification planning and registered-provider dispatch", () => {
             beforeEach( () => {

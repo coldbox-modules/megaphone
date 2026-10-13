@@ -7,7 +7,7 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
-    name: Tests
+    name: Tests (${{ matrix.engine.label || matrix.engine.cfengine }}, ${{ matrix.coldbox }})
     strategy:
       fail-fast: false
       matrix:
@@ -25,6 +25,31 @@ jobs:
           - cfengine: "adobe@be"
             java: 21
         coldbox: ["coldbox@6", "coldbox@7", "coldbox@be"]
+        include:
+          - engine:
+              cfengine: "boxlang@1"
+              java: 21
+              label: "boxlang@1"
+              serverConfig: "server-boxlang.json"
+            coldbox: "coldbox@8"
+          - engine:
+              cfengine: "boxlang@1"
+              java: 21
+              label: "boxlang@1 (CFML compat)"
+              serverConfig: "server-boxlang-cfml.json"
+            coldbox: "coldbox@8"
+          - engine:
+              cfengine: "boxlang@be"
+              java: 21
+              label: "boxlang@be"
+              serverConfig: "server-boxlang.json"
+            coldbox: "coldbox@be"
+          - engine:
+              cfengine: "boxlang@be"
+              java: 21
+              label: "boxlang@be (CFML compat)"
+              serverConfig: "server-boxlang-cfml.json"
+            coldbox: "coldbox@be"
     services:
       mysql:
         image: mysql:8
@@ -49,11 +74,21 @@ jobs:
       - name: Set Up CommandBox
         uses: elpete/setup-commandbox@v1.0.0
 
+      - name: Install BoxLang support
+        if: startsWith(matrix.engine.cfengine, 'boxlang')
+        run: box install commandbox-boxlang
+
       - name: Install dependencies
         run: |
           box install
           box config set modules.commandbox-dotenv.checkEnvPreServerStart=false
           box install ${{ matrix.coldbox }} --noSave
+          if [[ "${{ matrix.engine.cfengine }}" == boxlang* ]]; then
+            box install testbox@6 --noSave
+            box install qb@14 --noSave
+            box install cbq@7 --noSave
+            box install hyper@8 --noSave
+          fi
 
       - name: Migrate database
         env:
@@ -66,6 +101,8 @@ jobs:
           box install commandbox-migrations
           box migrate install --verbose
           box migrate up --verbose
+          box migrate install manager=cbq --verbose
+          box migrate up manager=cbq --verbose
 
       - name: Start server
         env:
@@ -75,7 +112,12 @@ jobs:
           DB_USER: megaphone
           DB_PASSWORD: megaphone
           COLDBOX_VERSION: ${{ matrix.coldbox }}
-        run: box server start cfengine=${{ matrix.engine.cfengine }} javaVersion=openjdk${{ matrix.engine.java }}
+        run: |
+          if [[ -n "${{ matrix.engine.serverConfig }}" ]]; then
+            box server start serverConfigFile="${{ matrix.engine.serverConfig }}" cfengine="${{ matrix.engine.cfengine }}" javaVersion=openjdk${{ matrix.engine.java }}_jdk --noSaveSettings
+          else
+            box server start cfengine=${{ matrix.engine.cfengine }} javaVersion=openjdk${{ matrix.engine.java }}
+          fi
 
       - name: Run module activation, provider, inbox and storage regression suites
         env:

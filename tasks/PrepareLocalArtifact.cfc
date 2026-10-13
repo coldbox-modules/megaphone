@@ -63,7 +63,7 @@ component {
             }
         }
         for ( var name in names ) {
-            if ( reFindNoCase( "(^|/)(tests|testbox|modules|\.git|\.tmp)/|\.jar$|(^|/)\.env$", name ) ) {
+            if ( reFindNoCase( "(^|/)(tests|testbox|modules|\.git|\.tmp)/|\.jar$|(^|/)\.env$|^server[^/]*\.json$", name ) ) {
                 throw( message = "Artifact contains an excluded development/dependency file: " & name );
             }
         }

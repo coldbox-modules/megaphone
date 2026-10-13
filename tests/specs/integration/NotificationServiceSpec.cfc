@@ -18,7 +18,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                 expect( dbNotification.notifiableId ).toBe( testNotifiable.getNotifiableId() );
                 expect( dbNotification.notifiableType ).toBe( testNotifiable.getNotifiableType() );
                 expect( dbNotification.data ).toBe( serializeJSON( { "foo": "bar", "notifiable": 1 } ) );
-                expect( dbNotification.readDate ).toBe( "" );
+                expect( isNull( dbNotification.readDate ) || dbNotification.readDate == "" ).toBeTrue();
                 expect( dbNotification.createdDate ).notToBe( "" );
             } );
 
@@ -46,7 +46,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                 expect( dbNotification.data ).toBe(
                     serializeJSON( { "foo": "bar", "notifiable": testNotifiableA.getNotifiableId() } )
                 );
-                expect( dbNotification.readDate ).toBe( "" );
+                expect( isNull( dbNotification.readDate ) || dbNotification.readDate == "" ).toBeTrue();
                 expect( dbNotification.createdDate ).notToBe( "" );
 
                 var dbNotification = dbNotifications[ 2 ];
@@ -57,8 +57,36 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                 expect( dbNotification.data ).toBe(
                     serializeJSON( { "foo": "bar", "notifiable": testNotifiableB.getNotifiableId() } )
                 );
-                expect( dbNotification.readDate ).toBe( "" );
+                expect( isNull( dbNotification.readDate ) || dbNotification.readDate == "" ).toBeTrue();
                 expect( dbNotification.createdDate ).notToBe( "" );
+            } );
+
+            it( "deep-copies notification data per recipient while retaining WireBox provider access", () => {
+                var first = { "getNotifiableId": () => 1, "getNotifiableType": () => "test" };
+                var second = { "getNotifiableId": () => 2, "getNotifiableType": () => "test" };
+                var original = getInstance( "MutableDataNotification" ).setId( "original" );
+                var returned = variables.megaphone.notify(
+                    [ first, second ],
+                    original,
+                    { "payload": { "history": [] } }
+                );
+                var rows = getInstance( "QueryBuilder@qb" )
+                    .from( "megaphone_notifications" )
+                    .orderBy( "notifiableId" )
+                    .get();
+                expect( rows ).toHaveLength( 2 );
+                expect( deserializeJSON( rows[ 1 ].data ).history ).toBe( [ 1 ] );
+                expect( deserializeJSON( rows[ 2 ].data ).history ).toBe( [ 2 ] );
+                expect( rows[ 1 ].id ).notToBe( rows[ 2 ].id );
+                expect( rows[ 1 ].id ).notToBe( "original" );
+                expect( original.getPayload().history ).toBeEmpty();
+                expect(
+                    original
+                        .getNotificationService()
+                        .getChannel( "database" )
+                        .getName()
+                ).toBe( "database" );
+                expect( returned.getId() ).toBe( "original" );
             } );
 
             it( "throws an exception when trying to send a notification via an unknown channel", () => {

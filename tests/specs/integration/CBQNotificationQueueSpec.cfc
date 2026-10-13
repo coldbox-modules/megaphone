@@ -16,11 +16,19 @@ component extends="tests.resources.ModuleIntegrationSpec" {
         variables.settings = getController().getSetting( "moduleSettings" ).megaphone;
         variables.bootAdapter = variables.settings.queue.queueAdapter;
         variables.service = getWireBox().getInstance( "NotificationService@megaphone" );
+        variables.savedChannels = structCopy( variables.service.getChannels() );
         variables.deliveries = getWireBox().getInstance( "NotificationDeliveryService@megaphone" );
         variables.config = getWireBox().getInstance( "Config@cbq" );
         variables.resolver = getWireBox().getInstance( "QueueNotifiableResolver" );
         variables.policy = getWireBox().getInstance( "QueueEligibilityPolicy" );
     }
+
+    /** Restores registered channels so later bundles see their configured database and synchronous providers. */
+    public void function afterAll() {
+        variables.service.setChannels( variables.savedChannels );
+        super.afterAll();
+    }
+
 
     function run() {
         describe( "Bundled cbq notification queue", () => {

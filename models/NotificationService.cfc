@@ -28,7 +28,7 @@ component singleton accessors="true" {
         }
         arguments.notification.populate( arguments.properties );
         arrayWrap( arguments.notifiables ).each( ( notifiable ) => {
-            var uniqueNotification = duplicate( notification ).setId( variables.uuid.randomUUID().toString() );
+            var uniqueNotification = copyNotification( notification ).setId( variables.uuid.randomUUID().toString() );
             var channelNames = notification.via( notifiable );
             var preferences = notification.getChannelPreferences( notifiable, channelNames );
             channelNames.each( ( channelName ) => {
@@ -296,6 +296,39 @@ component singleton accessors="true" {
             message = "Channel [#channelName#] is not configured in your settings and is not available in WireBox.  Add it to your `channels` key in your `megaphone` config struct.",
             detail = "Found channels are: [#structKeyList( variables.channels ) ?: ""#]"
         );
+    }
+
+    /**
+     * Copies notification state for one recipient without cloning WireBox's shared collaborators on BoxLang.
+     * The shallow staging copy keeps the original instance intact; the second copy isolates its data.
+     *
+     * @notification The populated notification whose ID and data must remain unchanged.
+     * @returns BaseNotification
+     */
+    private BaseNotification function copyNotification( required BaseNotification notification ) {
+        if ( !structKeyExists( server, "boxlang" ) || !structKeyExists( arguments.notification, "$wbInjector" ) ) {
+            return duplicate( arguments.notification );
+        }
+        var staged = duplicate( arguments.notification, false );
+        var injector = staged.$wbInjector;
+        structDelete( staged, "$wbInjector" );
+        var scopes = { "variables": staged.getVariablesMixin(), "this": staged };
+        var injections = [];
+        var mapping = injector.getBinder().getMapping( arguments.notification.getNotificationMapping() );
+        for ( var dependency in mapping.getDIProperties() ) {
+            var scope = scopes[ dependency.scope ];
+            if ( structKeyExists( scope, dependency.name ) ) {
+                injections.append( { "scope": dependency.scope, "name": dependency.name, "value": scope[ dependency.name ] } );
+                structDelete( scope, dependency.name );
+            }
+        }
+        var copied = duplicate( staged );
+        copied.$wbInjector = injector;
+        var copiedScopes = { "variables": copied.getVariablesMixin(), "this": copied };
+        for ( var injection in injections ) {
+            copiedScopes[ injection.scope ][ injection.name ] = injection.value;
+        }
+        return copied;
     }
 
     /**
