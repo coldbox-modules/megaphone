@@ -2,11 +2,6 @@
 component extends="testbox.system.BaseSpec" {
 
     function run() {
-        if ( val( createObject( "java", "java.lang.System" ).getProperty( "java.specification.version" ) ) < 11 ) {
-            xdescribe( "Web Push SDK requires Java 11", () => {
-            } );
-            return;
-        }
         describe( "Real Web Push request preparation", () => {
             beforeEach( () => {
                 variables.factory = new megaphone.models.WebPushClassFactory();

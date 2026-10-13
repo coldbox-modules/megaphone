@@ -2,6 +2,10 @@
 
 ## A protocol-based library for sending Notifications in ColdBox
 
+## Requirements
+
+Megaphone requires JDK 11 or newer, ColdBox 6+, and Adobe ColdFusion 2021+ or Lucee 5+. The module test server and CI use JDK 11.
+
 ## Documentation
 Installation: `box install megaphone`
 
@@ -506,7 +510,7 @@ The runtime verifies the pinned SDK checksum before loading. Enrollment and serv
 
 `DatabaseNotificationService.getNotificationsAfter(notifiable, channelName="database", afterCursor="", maxRows=25, constraints, archiveMode="active", unread=false)` returns `DatabaseNotificationKeysetCursor`. The delegate offers the same method with an implicit notifiable. Use `getResults()`, `getNextCursor()`, `hasNext()`, and `next()`; its memento is `{ results, nextCursor, hasMore }`.
 
-Keep existing numbered-page cursor methods for offset pagination. Keyset pagination orders by exact stored creation time and ID, handles deleted boundaries and concurrent arrivals, and binds tokens to the notifiable. Configure `cursorTimestampExpression`, `cursorTimestampSqlType`, and `idSqlType` for the existing database adapter. PostgreSQL UUID columns use `other`; timestamp text must preserve precision. These settings are backend configuration, never client input.
+Use `getNotifications()` for numbered pages, backward navigation, and pagination totals. `getNotificationsAfter()` adds forward-only pagination for a changing feed; it does not replace the numbered-page methods. Numbered pages default to all archive states, while the forward cursor defaults to active entries. Keyset pagination orders by exact stored creation time and ID, handles deleted boundaries and concurrent arrivals, and binds tokens to the notifiable. Configure `cursorTimestampExpression`, `cursorTimestampSqlType`, and `idSqlType` for the existing database adapter. PostgreSQL UUID columns use `other`; timestamp text must preserve precision. These settings are backend configuration, never client input.
 
 Apply the inbox-state migration and enable `properties.inboxState=true` for archive/group queries. Constraints run inside ownership filters before pagination and remain on loaded handles for mutations. `configureQuery(callback, constrainMutations=false)` is only for display filters; leave authorization constraints enabled. Reset the cursor when filters change.
 

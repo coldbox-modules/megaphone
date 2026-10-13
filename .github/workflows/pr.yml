@@ -72,7 +72,7 @@ jobs:
           DB_USER: megaphone
           DB_PASSWORD: megaphone
           COLDBOX_VERSION: ${{ matrix.coldbox }}
-        run: box server start cfengine=${{ matrix.cfengine }}
+        run: box server start cfengine=${{ matrix.cfengine }} javaVersion=openjdk11
 
       - name: Run module activation, provider, inbox and storage regression suites
         env:

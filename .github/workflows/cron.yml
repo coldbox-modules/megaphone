@@ -13,8 +13,6 @@ jobs:
       matrix:
         cfengine: ["lucee@5", "lucee@6", "lucee@be", "adobe@2021", "adobe@2023.0.06", "adobe@be"]
         coldbox: ["coldbox@6", "coldbox@7", "coldbox@be"]
-        # Durable database/provider activation runs on both JVMs; Web Push SDK suites require Java 11.
-        javaVersion: ["openjdk8", "openjdk11"]
     services:
       mysql:
         image: mysql:8
@@ -64,7 +62,7 @@ jobs:
           DB_USER: megaphone
           DB_PASSWORD: megaphone
           COLDBOX_VERSION: ${{ matrix.coldbox }}
-        run: box server start cfengine=${{ matrix.cfengine }} javaVersion=${{ matrix.javaVersion }}
+        run: box server start cfengine=${{ matrix.cfengine }} javaVersion=openjdk11
 
       - name: Run module activation, provider, inbox and storage regression suites
         env:

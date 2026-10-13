@@ -1,5 +1,9 @@
 # v1.1.0 (pending release)
 
+## Requirements
+
+- JDK 11 or newer is the supported baseline. Module test servers and CI use JDK 11, with no JDK 8 matrix entry.
+
 ## Added
 
 - Bundled cbq queue adapter and delivery job, enabled by default with connection and queue defaults and per-call `connection` and `queue` overrides. The adapter uses the Provider on a registered cbq connection, uses cbq's connection, queue, and worker defaults, and leaves Provider and worker registration to the application. Known safe retry decisions use cbq release/backoff; custom adapters remain supported.
