@@ -9,7 +9,7 @@ component singleton {
     }
 
     public any function resolve( required string key, any fallback ) {
-        var configured = variables.settings.durable[ arguments.key ] ?: "";
+        var configured = variables.settings.queue[ arguments.key ] ?: "";
         if ( isSimpleValue( configured ) && len( configured ) ) {
             return variables.wirebox.getInstance( configured );
         }
@@ -35,7 +35,7 @@ component singleton {
         if ( isNull( resolver ) ) {
             throw(
                 type = "Megaphone.Configuration.MissingNotifiableResolver",
-                message = "Configure durable.notifiableResolver to load a notifiable by type and ID."
+                message = "Configure queue.notifiableResolver to load a notifiable by type and ID."
             );
         }
         return resolver.resolve( arguments.type, arguments.id );

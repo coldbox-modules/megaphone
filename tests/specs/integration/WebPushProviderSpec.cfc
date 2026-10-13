@@ -62,7 +62,7 @@ component extends="tests.specs.integration.NotificationQueueSpec" {
                     }
                 };
                 variables.service.registerChannels( { "push": { "provider": "WebPushProvider@megaphone", "properties": variables.properties } } );
-                getController().getSetting( "moduleSettings" ).megaphone.durable.queueAdapter = "";
+                getController().getSetting( "moduleSettings" ).megaphone.queue.queueAdapter = "";
             } );
             it( "seals and renews owned subscriptions without changing preferences or exposing secrets", () => {
                 var first = variables.subscriptions.register( variables.owner, variables.subscription, "Browser" );

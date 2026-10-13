@@ -19,11 +19,13 @@ component singleton {
             .setDelay( max( 0, dateDiff( "s", now(), availableDate ) ) );
         if ( !isNull( arguments.queue ) ) {
             job.onQueue( arguments.queue );
+        } else if ( len( variables.settings.queue.defaultQueue ) ) {
+            job.onQueue( variables.settings.queue.defaultQueue );
         }
         if ( !isNull( arguments.connection ) ) {
             job.onConnection( arguments.connection );
-        } else if ( len( variables.settings.durable.queueConnection ) ) {
-            job.onConnection( variables.settings.durable.queueConnection );
+        } else if ( len( variables.settings.queue.defaultConnection ) ) {
+            job.onConnection( variables.settings.queue.defaultConnection );
         }
         job.dispatch();
     }

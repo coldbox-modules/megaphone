@@ -106,7 +106,7 @@ component singleton {
         var configuredOptions = isNull( dispatchPolicy ) ? {} : dispatchPolicy.getDispatchOptions( arguments.id );
         configuredOptions.append( arguments.options, true );
         arguments.options = configuredOptions;
-        var policy = variables.runtime.getSettings().durable;
+        var policy = variables.runtime.getSettings().queue;
         var leaseSeconds = arguments.options.keyExists( "leaseSeconds" ) ? arguments.options.leaseSeconds : policy.leaseSeconds;
         var maxAttempts = arguments.options.keyExists( "maxAttempts" ) ? arguments.options.maxAttempts : policy.maxAttempts;
         var retrySeconds = arguments.options.keyExists( "retrySeconds" ) ? arguments.options.retrySeconds : policy.retrySeconds;

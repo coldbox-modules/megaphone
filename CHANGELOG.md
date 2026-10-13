@@ -2,7 +2,7 @@
 
 ## Added
 
-- Bundled cbq queue adapter and delivery job, enabled by default with a connection setting and per-call `connection` and `queue` overrides. The adapter uses the Provider on a registered cbq connection, uses cbq's connection, queue, and worker defaults, and leaves Provider and worker registration to the application. Known safe retry decisions use cbq release/backoff; custom adapters remain supported.
+- Bundled cbq queue adapter and delivery job, enabled by default with connection and queue defaults and per-call `connection` and `queue` overrides. The adapter uses the Provider on a registered cbq connection, uses cbq's connection, queue, and worker defaults, and leaves Provider and worker registration to the application. Known safe retry decisions use cbq release/backoff; custom adapters remain supported.
 
 - Notification inbox APIs with recipient access checks, stable cursors, read snapshots, archive state, history imports, and retention.
 - Preferences by scope and channel, including device exclusions for each notification type.
@@ -11,6 +11,8 @@
 - Event replay cutoffs and cleanup callbacks for keeping external references and retirement receipts.
 
 ## API alignment
+
+- Queue configuration uses `queue` settings, with `defaultConnection` and `defaultQueue` for cbq routing.
 
 - Durable planning and queueing now use NotificationService, notification instances/mappings, notifiables, registered providers, and delegates.
 - Added typed plans, publications, delivery/preparation/recovery results, keyset cursors, module storage configuration, and lazy Web Push infrastructure.

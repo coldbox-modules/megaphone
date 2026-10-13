@@ -15,9 +15,10 @@ component {
                 "preferences": {},
                 "subscriptions": {}
             },
-            "durable": {
+            "queue": {
                 "queueAdapter": "CBQNotificationQueue@megaphone",
-                "queueConnection": "",
+                "defaultConnection": "",
+                "defaultQueue": "",
                 "notifiableResolver": "",
                 "eligibilityPolicy": "",
                 "snapshotHasher": "",
@@ -35,14 +36,15 @@ component {
 
     function onLoad() {
         param settings.storage = {};
-        param settings.durable = {};
-        param settings.durable.queueAdapter = "CBQNotificationQueue@megaphone";
-        param settings.durable.queueConnection = "";
-        param settings.durable.leaseSeconds = 60;
-        param settings.durable.maxAttempts = 5;
-        param settings.durable.retrySeconds = 30;
-        param settings.durable.maxRecoveryAttempts = 5;
-        param settings.durable.maxRecoveryAllowance = 45;
+        param settings.queue = {};
+        param settings.queue.queueAdapter = "CBQNotificationQueue@megaphone";
+        param settings.queue.defaultConnection = "";
+        param settings.queue.defaultQueue = "";
+        param settings.queue.leaseSeconds = 60;
+        param settings.queue.maxAttempts = 5;
+        param settings.queue.retrySeconds = 30;
+        param settings.queue.maxRecoveryAttempts = 5;
+        param settings.queue.maxRecoveryAllowance = 45;
         var stores = {
             "events": "EventStore",
             "deliveries": "DeliveryStore",
@@ -54,8 +56,8 @@ component {
             settings.storage[ key ] = properties;
             if ( key == "deliveries" ) {
                 properties = duplicate( properties );
-                properties.maxRecoveryAttempts = settings.durable.maxRecoveryAttempts;
-                properties.maxRecoveryAllowance = settings.durable.maxRecoveryAllowance;
+                properties.maxRecoveryAttempts = settings.queue.maxRecoveryAttempts;
+                properties.maxRecoveryAllowance = settings.queue.maxRecoveryAllowance;
             }
             binder
                 .map( stores[ key ] & "@megaphone" )

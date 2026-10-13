@@ -13,8 +13,8 @@ component extends="tests.resources.ModuleIntegrationSpec" {
             .to( "tests.resources.QueueEligibilityPolicy" )
             .asSingleton();
         var settings = getController().getSetting( "moduleSettings" ).megaphone;
-        settings.durable.notifiableResolver = "QueueNotifiableResolver";
-        settings.durable.eligibilityPolicy = "QueueEligibilityPolicy";
+        settings.queue.notifiableResolver = "QueueNotifiableResolver";
+        settings.queue.eligibilityPolicy = "QueueEligibilityPolicy";
         variables.service = getWireBox().getInstance( "NotificationService@megaphone" );
         variables.deliveries = getWireBox().getInstance( "NotificationDeliveryService@megaphone" );
         variables.resolver = getWireBox().getInstance( "QueueNotifiableResolver" );
@@ -28,7 +28,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                 variables.policy.setStatus( "ready" );
                 variables.options = { "namespace": "queue-spec", "eventKey": createUUID(), "version": 1 };
                 variables.service.registerChannels( { "database": { "provider": "DatabaseProvider@megaphone", "properties": {} } } );
-                getController().getSetting( "moduleSettings" ).megaphone.durable.queueAdapter = "";
+                getController().getSetting( "moduleSettings" ).megaphone.queue.queueAdapter = "";
             } );
             it( "binds storage settings during actual module activation", () => {
                 var stores = {
@@ -63,7 +63,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
             } );
             it( "rolls back events and work when queue insertion fails", () => {
                 var adapter = new tests.resources.DurableQueueFixture( true );
-                getController().getSetting( "moduleSettings" ).megaphone.durable.queueAdapter = adapter;
+                getController().getSetting( "moduleSettings" ).megaphone.queue.queueAdapter = adapter;
                 expect( () => variables.service.queue(
                     variables.owner,
                     "QueueNotification",
