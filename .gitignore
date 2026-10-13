@@ -8,3 +8,4 @@
 .env
 .tmp
 /resources/java/webpush/*.jar
+/resources/java/webpush/box.json

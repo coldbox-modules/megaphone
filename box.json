@@ -29,7 +29,8 @@
     "type":"modules",
     "dependencies":{
         "qb":"^9.4.0",
-        "str":"^3.0.1"
+        "str":"^3.0.1",
+        "zerodep-web-push-java":"jar:https://repo.maven.apache.org/maven2/com/zerodeplibs/zerodep-web-push-java/2.1.5/zerodep-web-push-java-2.1.5.jar"
     },
     "devDependencies":{
         "coldbox":"^6",
@@ -45,11 +46,13 @@
         "str":"modules/str/",
         "cbmailservices":"tests/resources/app/modules/cbmailservices/",
         "hyper":"tests/resources/app/modules/hyper/",
-        "cbq":"modules/cbq/"
+        "cbq":"modules/cbq/",
+        "zerodep-web-push-java":"resources/java/webpush/"
     },
     "ignore":[
         "**/.*",
         "resources/java/webpush/*.jar",
+        "resources/java/webpush/box.json",
         "test",
         "tests",
         "server.json"

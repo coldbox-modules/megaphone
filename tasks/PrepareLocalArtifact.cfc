@@ -54,7 +54,7 @@ component {
                 "models/NotificationDeliveryJob.cfc",
                 "models/Providers/WebPushProvider.cfc",
                 "models/Delegates/DatabaseNotificationService.cfc",
-                "tasks/InstallWebPushSDK.cfc",
+                "resources/java/webpush-LICENSE.txt",
                 "resources/database/migrations/2026_10_06_010002_complete_megaphone_recovery_allowance.cfc"
             ]
         ) {
@@ -68,6 +68,16 @@ component {
             }
         }
         var descriptor = deserializeJSON( fileRead( root & "/box.json" ) );
+        if (
+            ( descriptor.dependencies[ "zerodep-web-push-java" ] ?: "" ) !=
+            "jar:https://repo.maven.apache.org/maven2/com/zerodeplibs/zerodep-web-push-java/2.1.5/zerodep-web-push-java-2.1.5.jar" ||
+            ( descriptor.installPaths[ "zerodep-web-push-java" ] ?: "" ) != "resources/java/webpush/"
+        ) {
+            throw( message = "The Web Push SDK must be a pinned JAR dependency with its runtime install path." );
+        }
+        if ( names.find( "resources/java/webpush/box.json" ) || names.find( "tasks/InstallWebPushSDK.cfc" ) ) {
+            throw( message = "The module archive must not contain JAR endpoint metadata or a separate SDK installer." );
+        }
         if ( structKeyExists( descriptor.dependencies, "cbq" ) || names.find( "models/CBQConfig.cfc" ) ) {
             throw( message = "cbq must remain an application dependency, without a bundled configuration." );
         }

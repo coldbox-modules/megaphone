@@ -7,7 +7,7 @@
 - Notification inbox APIs with recipient access checks, stable cursors, read snapshots, archive state, history imports, and retention.
 - Preferences by scope and channel, including device exclusions for each notification type.
 - Durable events and deliveries with transactional queue jobs, claim tokens, retries, acceptance tracking, and operator recovery history.
-- Encrypted push subscriptions, renewal and disconnect support, per-device delivery, response handling, and an optional SDK installer.
+- Encrypted push subscriptions, renewal and disconnect support, per-device delivery, response handling, and a pinned Web Push SDK JAR dependency installed by CommandBox.
 - Event replay cutoffs and cleanup callbacks for keeping external references and retirement receipts.
 
 ## API alignment
@@ -26,11 +26,11 @@
 
 - MySQL delivery timestamps keep fractional seconds so immediately due work stays due.
 - Adobe receipt checks accept an explicit false decision, and push reflection uses Java arrays supported by both engines.
-- CI installs the push SDK and runs the persistence specs against MySQL with the correct module mappings.
+- CI installs the declared push SDK dependency and runs the persistence specs against MySQL with the correct module mappings.
 
 ## Upgrading
 
-Your existing notification and provider APIs still work. To use the new storage features, apply the module migrations in order to the same datasource as your application transaction. Megaphone includes a default cbq adapter; install cbq in your application and configure a registered connection and queue using your chosen Provider. Apply cbq's queue migrations when using its database Provider. You'll need to configure preference scopes, access and eligibility callbacks, retention and replay settings, and worker recovery. For web push, add subscription encryption keys, push credentials, the optional SDK, and your browser and service-worker integration.
+Your existing notification and provider APIs still work. To use the new storage features, apply the module migrations in order to the same datasource as your application transaction. Megaphone includes a default cbq adapter; install cbq in your application and configure a registered connection and queue using your chosen Provider. Apply cbq's queue migrations when using its database Provider. You'll need to configure preference scopes, access and eligibility callbacks, retention and replay settings, and worker recovery. For web push, add subscription encryption keys, push credentials, Java 11+, and your browser and service-worker integration.
 
 Installing the module doesn't import your existing history, preferences, or pending deliveries. Plan the handoff from your old delivery owner, keep stable import IDs, and make sure rollback won't resend work that's already been accepted. You can decide separately whether Megaphone handles authentication and account-access mail.
 

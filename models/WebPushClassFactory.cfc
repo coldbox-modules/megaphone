@@ -1,4 +1,4 @@
-/** Loads the explicitly installed, pinned optional Megaphone push SDK. */
+/** Loads the pinned Web Push JAR dependency only when push is used. */
 component {
 
     public WebPushClassFactory function init() {
@@ -10,7 +10,7 @@ component {
         ) {
             throw(
                 type = "Megaphone.Push.ConfigurationUnavailable",
-                message = "The pinned push SDK must be installed and verified."
+                message = "The Web Push SDK dependency is missing or does not match its verified checksum. Reinstall Megaphone with CommandBox."
             );
         }
         return this;

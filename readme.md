@@ -498,13 +498,9 @@ Duplicate jobs cannot share a lease. Preparation failures and feature pauses do 
 
 Push channel properties may configure `enabled`, `origin`, `publicKey`, `privateKey`, `subject`, `allowedHosts`, `activeStorageKeyId`, and `storageKeys` directly. The bundled runtime accepts base64 PKCS8/X509 VAPID keys and a storage keyring of base64 AES-256 keys. An optional runtime mapping implements `enabled`, `context(notifiable)`, `cipher`, and `transport`; use it to retain existing recipient/origin encryption contexts. Infrastructure is resolved lazily so disabled or incomplete push does not prevent other channels from starting.
 
-Install the optional Java 11+ SDK from the installed module directory:
+Megaphone declares the Web Push SDK as a pinned JAR dependency in `box.json`; CommandBox installs it with the module. The bundled transport requires Java 11+; there is no separate SDK installation step.
 
-```sh
-box task run taskFile=tasks/InstallWebPushSDK.cfc
-```
-
-The installer verifies the pinned SDK checksum. Enrollment and service-worker integration remain application responsibilities. Registration does not change preferences or publish activity. Disconnect devices on logout/account switch. Provider tests use fixture HTTP clients; verify real devices separately before deployment.
+The runtime verifies the pinned SDK checksum before loading. Enrollment and service-worker integration remain application responsibilities. Registration does not change preferences or publish activity. Disconnect devices on logout/account switch. Provider tests use fixture HTTP clients; verify real devices separately before deployment.
 
 ## Inbox cursors and read state
 

@@ -1,4 +1,4 @@
-/** Registered Web Push channel. Optional SDK/configuration is resolved only when used. */
+/** Registered Web Push channel. Java SDK/configuration is resolved only when push is used. */
 component extends="BaseProvider" accessors="true" implements="megaphone.models.Interfaces.IDurableNotificationProvider" {
 
     property name="subscriptions" inject="PushSubscriptionService@megaphone";

@@ -1,4 +1,4 @@
-/** Optional SDK integration bundle. Run InstallWebPushSDK before invoking this bundle. No network sends. */
+/** Declared SDK dependency integration bundle. Java 11+; no network sends. */
 component extends="testbox.system.BaseSpec" {
 
     function run() {
@@ -9,9 +9,7 @@ component extends="testbox.system.BaseSpec" {
         }
         describe( "Real Web Push request preparation", () => {
             beforeEach( () => {
-                variables.factory = new tests.resources.PushSDKClassFactory(
-                    expandPath( "/megaphone/resources/java/webpush/zerodep-web-push-java-2.1.5.jar" )
-                );
+                variables.factory = new megaphone.models.WebPushClassFactory();
                 var generator = createObject( "java", "java.security.KeyPairGenerator" ).getInstance( "EC" );
                 generator.initialize(
                     createObject( "java", "java.security.spec.ECGenParameterSpec" ).init( "secp256r1" )
