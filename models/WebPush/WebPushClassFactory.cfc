@@ -25,7 +25,7 @@ component {
      * @returns any
      */
     public any function create( required string className ) {
-        return createObject( "java", arguments.className, variables.jarPath );
+        return createObject( "java", arguments.className, [ variables.jarPath ] );
     }
 
 }

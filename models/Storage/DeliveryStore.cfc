@@ -538,20 +538,23 @@ component accessors="true" {
             }
             // The consumer validates an authoritative receipt for this immutable delivery identity.
             // This callback must perform local checks only, never provider I/O.
-            var receipt = arguments.receipt;
-            if ( !isStruct( receipt ) || !structKeyExists( receipt, "accepted" ) || !isBoolean( receipt.accepted ) ) {
+            if (
+                !isStruct( arguments.receipt ) || !structKeyExists( arguments.receipt, "accepted" ) || !isBoolean(
+                    arguments.receipt.accepted
+                )
+            ) {
                 throw(
                     type = "Megaphone.Delivery.InvalidReceipt",
                     message = "Receipt validation requires an explicit acceptance decision."
                 );
             }
-            if ( !receipt.accepted ) {
+            if ( !arguments.receipt.accepted ) {
                 return false;
             }
             if (
-                !isSimpleValue( receipt.providerReference ?: "" ) || !len( trim( receipt.providerReference ?: "" ) ) || len(
-                    receipt.providerReference
-                ) > 190
+                !isSimpleValue( arguments.receipt.providerReference ?: "" ) || !len(
+                    trim( arguments.receipt.providerReference ?: "" )
+                ) || len( arguments.receipt.providerReference ) > 190
             ) {
                 throw(
                     type = "Megaphone.Delivery.InvalidReceipt",
@@ -563,7 +566,7 @@ component accessors="true" {
                 .update( {
                     "state": "accepted",
                     "reason": textBinding( "receipt-confirmed" ),
-                    "providerReference": textBinding( receipt.providerReference ),
+                    "providerReference": textBinding( arguments.receipt.providerReference ),
                     "updatedDate": arguments.clock,
                     "settledDate": timestamp( arguments.clock )
                 } );
