@@ -379,12 +379,6 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                     variables.deliveries.getDelivery( publication.getDeliveries()[ 1 ].getId() ).getTransportCount()
                 ).toBe( 1 );
             } );
-            it( "does not choose a provider when the application has no cbq configuration", () => {
-                var config = getWireBox().getInstance( "CBQConfig@megaphone" );
-                config.configure();
-                expect( config.getConnectionDefinitions() ).toBeEmpty();
-                expect( config.getWorkerPoolDefinitions() ).toBeEmpty();
-            } );
             it( "reschedules deferred policy checks without consuming a transport", () => {
                 var publication = variables.service.queue(
                     variables.owner,

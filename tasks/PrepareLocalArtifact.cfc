@@ -52,7 +52,6 @@ component {
                 "models/NotificationPlan.cfc",
                 "models/CBQNotificationQueue.cfc",
                 "models/NotificationDeliveryJob.cfc",
-                "models/CBQConfig.cfc",
                 "models/Providers/WebPushProvider.cfc",
                 "models/Delegates/DatabaseNotificationService.cfc",
                 "tasks/InstallWebPushSDK.cfc",
@@ -69,6 +68,9 @@ component {
             }
         }
         var descriptor = deserializeJSON( fileRead( root & "/box.json" ) );
+        if ( structKeyExists( descriptor.dependencies, "cbq" ) || names.find( "models/CBQConfig.cfc" ) ) {
+            throw( message = "cbq must remain an application dependency, without a bundled configuration." );
+        }
         var receipt = {
             artifact: target,
             sha256: lCase( hash( fileReadBinary( target ), "SHA-256" ) ),

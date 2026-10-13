@@ -3,10 +3,24 @@ component singleton {
 
     property name="settings" inject="coldbox:moduleSettings:megaphone";
     property name="wirebox" inject="wirebox";
+    property name="moduleService" inject="box:moduleService";
 
     public void function enqueue( required NotificationDelivery delivery, string connection, string queue ) {
         if ( !listFind( "queued,retryable,processing", arguments.delivery.getState() ) ) {
             return;
+        }
+        if ( !variables.moduleService.isModuleRegistered( "cbq" ) ) {
+            throw(
+                type = "Megaphone.Queue.MissingCBQ",
+                message = "Install and configure cbq to queue notifications with Megaphone's cbq adapter."
+            );
+        }
+        variables.moduleService.activateModule( "cbq" );
+        if ( !variables.moduleService.isModuleActive( "cbq" ) ) {
+            throw(
+                type = "Megaphone.Queue.MissingCBQ",
+                message = "The cbq module must be active to queue notifications with Megaphone's cbq adapter."
+            );
         }
         var availableDate = arguments.delivery.getAvailableDate();
         if ( arguments.delivery.getState() == "processing" ) {

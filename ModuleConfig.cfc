@@ -3,7 +3,7 @@ component {
     this.name = "megaphone";
     this.author = "Ortus Solutions";
     this.webUrl = "https://github.com/coldbox-modules/megaphone";
-    this.dependencies = [ "qb", "str", "cbq" ];
+    this.dependencies = [ "qb", "str" ];
     this.cfmapping = "megaphone";
 
     function configure() {
@@ -65,15 +65,6 @@ component {
                 .initArg( name = "properties", value = properties );
         }
         variables.wirebox.getInstance( "NotificationService@megaphone" ).registerChannels( settings.channels ?: {} );
-        configureDefaultQueue();
-    }
-
-    private void function configureDefaultQueue() {
-        var cbqSettings = variables.controller.getSetting( "moduleSettings" ).cbq;
-        // Existing application cbq configurations take precedence over the bundled one.
-        if ( cbqSettings.configPath == "config.cbq" && !variables.wirebox.containsInstance( cbqSettings.configPath ) ) {
-            cbqSettings.configPath = "#moduleMapping#.models.CBQConfig";
-        }
     }
 
 }

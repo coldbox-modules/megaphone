@@ -12,6 +12,8 @@
 
 ## API alignment
 
+- cbq is an optional application dependency. Using the cbq adapter without cbq throws `Megaphone.Queue.MissingCBQ`; synchronous notifications, custom adapters, and polling do not require it.
+
 - Queue configuration uses `queue` settings, with `defaultConnection` and `defaultQueue` for cbq routing.
 
 - Durable planning and queueing now use NotificationService, notification instances/mappings, notifiables, registered providers, and delegates.
@@ -28,7 +30,7 @@
 
 ## Upgrading
 
-Your existing notification and provider APIs still work. To use the new storage features, apply the module migrations in order to the same datasource as your application transaction. cbq is included with a default adapter; configure a registered connection and queue using your chosen Provider. Apply cbq's queue migrations when using its database Provider. You'll need to configure preference scopes, access and eligibility callbacks, retention and replay settings, and worker recovery. For web push, add subscription encryption keys, push credentials, the optional SDK, and your browser and service-worker integration.
+Your existing notification and provider APIs still work. To use the new storage features, apply the module migrations in order to the same datasource as your application transaction. Megaphone includes a default cbq adapter; install cbq in your application and configure a registered connection and queue using your chosen Provider. Apply cbq's queue migrations when using its database Provider. You'll need to configure preference scopes, access and eligibility callbacks, retention and replay settings, and worker recovery. For web push, add subscription encryption keys, push credentials, the optional SDK, and your browser and service-worker integration.
 
 Installing the module doesn't import your existing history, preferences, or pending deliveries. Plan the handoff from your old delivery owner, keep stable import IDs, and make sure rollback won't resend work that's already been accepted. You can decide separately whether Megaphone handles authentication and account-access mail.
 

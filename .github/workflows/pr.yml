@@ -87,6 +87,20 @@ jobs:
           COLDBOX_VERSION: ${{ matrix.coldbox }}
         run: box testbox run
 
+      - name: Verify module activation and optional queue dependency without cbq
+        env:
+          DB_HOST: localhost
+          DB_PORT: ${{ job.services.mysql.ports[3306] }}
+          DB_NAME: megaphone
+          DB_USER: megaphone
+          DB_PASSWORD: megaphone
+          COLDBOX_VERSION: ${{ matrix.coldbox }}
+        run: |
+          mkdir -p .tmp
+          mv modules/cbq .tmp/cbq-optional
+          trap 'mv .tmp/cbq-optional modules/cbq' EXIT
+          box testbox run bundles=tests.specs.integration.OptionalCBQSpec
+
   format:
     runs-on: ubuntu-latest
     name: Format
