@@ -11,7 +11,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cfengine: ["lucee@5", "lucee@6", "lucee@be", "adobe@2021", "adobe@2023.0.06", "adobe@be"]
+        engine:
+          - cfengine: "lucee@5"
+            java: 11
+          - cfengine: "lucee@6"
+            java: 11
+          - cfengine: "lucee@be"
+            java: 21
+          - cfengine: "adobe@2021"
+            java: 11
+          - cfengine: "adobe@2023.0.06"
+            java: 17
+          - cfengine: "adobe@be"
+            java: 21
         coldbox: ["coldbox@6", "coldbox@7", "coldbox@be"]
     services:
       mysql:
@@ -29,9 +41,10 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Setup Java JDK
-        uses: actions/setup-java@v1.4.3
+        uses: actions/setup-java@v4
         with:
-          java-version: 11
+          distribution: temurin
+          java-version: ${{ matrix.engine.java }}
 
       - name: Set Up CommandBox
         uses: elpete/setup-commandbox@v1.0.0
@@ -62,7 +75,7 @@ jobs:
           DB_USER: megaphone
           DB_PASSWORD: megaphone
           COLDBOX_VERSION: ${{ matrix.coldbox }}
-        run: box server start cfengine=${{ matrix.cfengine }} javaVersion=openjdk11
+        run: box server start cfengine=${{ matrix.engine.cfengine }} javaVersion=openjdk${{ matrix.engine.java }}
 
       - name: Run module activation, provider, inbox and storage regression suites
         env:

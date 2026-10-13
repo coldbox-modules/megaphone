@@ -3,7 +3,7 @@
         "cfengine":"adobe@2023.0.06"
     },
     "jvm":{
-        "javaVersion":"openjdk11"
+        "javaVersion":"openjdk17"
     },
     "web":{
         "http":{

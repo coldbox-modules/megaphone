@@ -4,7 +4,7 @@
 
 ## Requirements
 
-Megaphone requires JDK 11 or newer, ColdBox 6+, and Adobe ColdFusion 2021+ or Lucee 5+. The module test server and CI use JDK 11.
+Megaphone requires JDK 11 or newer, ColdBox 6+, and Adobe ColdFusion 2021+ or Lucee 5+. Use a Java version supported by your engine when it needs a newer JDK. CI selects Java per engine: 11 for Lucee 5/6 and Adobe 2021, 17 for Adobe 2023, and 21 for the scheduled bleeding-edge engines.
 
 ## Documentation
 Installation: `box install megaphone`
