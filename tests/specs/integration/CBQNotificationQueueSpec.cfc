@@ -341,6 +341,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
             } );
             it( "allows a custom adapter or explicit polling without cbq jobs", () => {
                 var adapter = new tests.resources.DurableQueueFixture();
+                expect( adapter ).toBeInstanceOf( "megaphone.models.Interfaces.INotificationQueue" );
                 variables.settings.queue.queueAdapter = adapter;
                 variables.service.queue(
                     variables.owner,

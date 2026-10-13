@@ -8,6 +8,10 @@ interface displayName="INotificationQueue" {
      * @connection The queue connection override, when supplied.
      * @queue The queue name override, when supplied.
      */
-    public void function enqueue( required NotificationDelivery delivery, string connection, string queue );
+    public void function enqueue(
+        required megaphone.models.NotificationDelivery delivery,
+        string connection,
+        string queue
+    );
 
 }
