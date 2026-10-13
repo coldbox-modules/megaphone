@@ -76,7 +76,7 @@ component extends="BaseProvider" accessors="true" implements="megaphone.models.I
      */
     public BaseNotification function notify( required any notifiable, required BaseNotification notification ) {
         for ( var deviceId in getDeliveryTargets( arguments.notifiable, arguments.notification ) ) {
-            var delivery = new megaphone.models.NotificationDelivery( {
+            var delivery = newNotificationDelivery().configure( {
                 "id": arguments.notification.getId(),
                 "notifiableId": arguments.notifiable.getNotifiableId(),
                 "notifiableType": arguments.notifiable.getNotifiableType(),
@@ -147,7 +147,7 @@ component extends="BaseProvider" accessors="true" implements="megaphone.models.I
         } catch ( any ignored ) {
             return preparation( "permanent", "push-request-invalid" );
         }
-        return new megaphone.models.DeliveryPreparation( {
+        return newDeliveryPreparation().configure( {
             "status": "ready",
             "data": {
                 "notifiable": arguments.notifiable,
@@ -171,7 +171,7 @@ component extends="BaseProvider" accessors="true" implements="megaphone.models.I
                 .getExcludedIds( data.notifiable, data.notificationType )
                 .findNoCase( arguments.delivery.getDeviceId() )
         ) {
-            return new megaphone.models.DeliveryResult( { "status": "permanent", "reason": "push-source-changed-before-send" } );
+            return newDeliveryResult().configure( { "status": "permanent", "reason": "push-source-changed-before-send" } );
         }
         var policy = variables.wirebox.getInstance( "NotificationRuntime@megaphone" ).resolve( "eligibilityPolicy" );
         if ( !isNull( policy ) && arguments.delivery.getMemento().keyExists( "eventId" ) ) {
@@ -179,7 +179,7 @@ component extends="BaseProvider" accessors="true" implements="megaphone.models.I
                 .getInstance( "NotificationDeliveryService@megaphone" )
                 .getEvent( arguments.delivery.getEventId() );
             if ( isNull( event ) || policy.check( arguments.delivery, data.notifiable, event ).getStatus() != "ready" ) {
-                return new megaphone.models.DeliveryResult( { "status": "permanent", "reason": "push-source-changed-before-send" } );
+                return newDeliveryResult().configure( { "status": "permanent", "reason": "push-source-changed-before-send" } );
             }
         }
         var outcome = data.transport.sendPrepared( data.request );
@@ -188,7 +188,7 @@ component extends="BaseProvider" accessors="true" implements="megaphone.models.I
         }
         outcome.status = outcome.outcome;
         structDelete( outcome, "outcome" );
-        return new megaphone.models.DeliveryResult( outcome );
+        return newDeliveryResult().configure( outcome );
     }
 
     /**
@@ -212,7 +212,28 @@ component extends="BaseProvider" accessors="true" implements="megaphone.models.I
      * @returns DeliveryPreparation
      */
     private DeliveryPreparation function preparation( required string status, required string reason ) {
-        return new megaphone.models.DeliveryPreparation( { "status": arguments.status, "reason": arguments.reason } );
+        return newDeliveryPreparation().configure( { "status": arguments.status, "reason": arguments.reason } );
+    }
+
+    /**
+     * Supplies a fresh DeliveryPreparation using the application's WireBox mapping.
+     * @returns DeliveryPreparation
+     */
+    private DeliveryPreparation function newDeliveryPreparation() provider="DeliveryPreparation@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh DeliveryResult using the application's WireBox mapping.
+     * @returns DeliveryResult
+     */
+    private DeliveryResult function newDeliveryResult() provider="DeliveryResult@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh NotificationDelivery using the application's WireBox mapping.
+     * @returns NotificationDelivery
+     */
+    private NotificationDelivery function newNotificationDelivery() provider="NotificationDelivery@megaphone" {
     }
 
 }

@@ -6,7 +6,15 @@ component {
      * Stores the channel properties used to configure the default push runtime.
      * @returns WebPushRuntime
      */
-    public WebPushRuntime function init( required struct properties ) {
+    public WebPushRuntime function init( struct properties = {} ) {
+        return configure( argumentCollection = arguments );
+    }
+
+    /**
+     * Configures the WebPushRuntime after WireBox constructs and injects it.
+     * @returns WebPushRuntime
+     */
+    public WebPushRuntime function configure( required struct properties ) {
         variables.configuration = arguments.properties;
         return this;
     }
@@ -36,7 +44,7 @@ component {
      * @returns any
      */
     public any function cipher() {
-        return new megaphone.models.SubscriptionCipher(
+        return newSubscriptionCipher().configure(
             variables.configuration.activeStorageKeyId,
             isStruct( variables.configuration.storageKeys ) ? variables.configuration.storageKeys : deserializeJSON(
                 variables.configuration.storageKeys
@@ -138,7 +146,7 @@ component {
                     factory.create( "com.zerodeplibs.webpush.key.PrivateKeySources" ).ofECPrivateKey( privateKey ),
                     factory.create( "com.zerodeplibs.webpush.key.PublicKeySources" ).ofECPublicKey( publicKey )
                 );
-            return new megaphone.models.WebPushTransport(
+            return newWebPushTransport().configure(
                 classFactory = factory,
                 vapidKeyPair = pair,
                 subject = variables.configuration.subject,
@@ -152,6 +160,20 @@ component {
                 message = "Push delivery configuration is unavailable."
             );
         }
+    }
+
+    /**
+     * Supplies a fresh SubscriptionCipher using the application's WireBox mapping.
+     * @returns SubscriptionCipher
+     */
+    private SubscriptionCipher function newSubscriptionCipher() provider="SubscriptionCipher@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh WebPushTransport using the application's WireBox mapping.
+     * @returns WebPushTransport
+     */
+    private WebPushTransport function newWebPushTransport() provider="WebPushTransport@megaphone" {
     }
 
 }

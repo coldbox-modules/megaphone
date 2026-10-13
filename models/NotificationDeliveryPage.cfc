@@ -6,7 +6,15 @@ component accessors="true" {
      * Captures a delivery page and whether more results are available.
      * @returns NotificationDeliveryPage
      */
-    public NotificationDeliveryPage function init( required array results, required boolean hasMore ) {
+    public NotificationDeliveryPage function init( array results = [], boolean hasMore = false ) {
+        return configure( argumentCollection = arguments );
+    }
+
+    /**
+     * Configures the NotificationDeliveryPage after WireBox constructs and injects it.
+     * @returns NotificationDeliveryPage
+     */
+    public NotificationDeliveryPage function configure( required array results, required boolean hasMore ) {
         variables.results = arguments.results;
         variables.hasMore = arguments.hasMore;
         return this;

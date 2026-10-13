@@ -20,7 +20,7 @@ component singleton {
         date createdDate = now(),
         string notificationMapping = ""
     ) {
-        return new megaphone.models.NotificationEvent( variables.eventStore.record( argumentCollection = arguments ) );
+        return newNotificationEvent().configure( variables.eventStore.record( argumentCollection = arguments ) );
     }
 
     /**
@@ -32,7 +32,7 @@ component singleton {
         if ( isNull( row ) ) {
             return;
         }
-        return new megaphone.models.NotificationEvent( row );
+        return newNotificationEvent().configure( row );
     }
 
     /**
@@ -88,10 +88,7 @@ component singleton {
      */
     public NotificationDeliveryPage function getDeliveries( numeric maxRows = 50, numeric offset = 0, any constraints ) {
         var page = variables.deliveryStore.getPage( argumentCollection = arguments );
-        return new megaphone.models.NotificationDeliveryPage(
-            page.results.map( ( row ) => delivery( row ) ),
-            page.hasMore
-        );
+        return newNotificationDeliveryPage().configure( page.results.map( ( row ) => delivery( row ) ), page.hasMore );
     }
 
     /**
@@ -121,7 +118,7 @@ component singleton {
     public array function getAttempts( required string id ) {
         return variables.deliveryStore
             .attempts( arguments.id )
-            .map( ( row ) => new megaphone.models.NotificationDeliveryAttempt( row ) );
+            .map( ( row ) => newNotificationDeliveryAttempt().configure( row ) );
     }
     /**
      * Returns a page of public recovery receipts for a delivery.
@@ -133,8 +130,8 @@ component singleton {
         numeric offset = 0
     ) {
         var page = variables.deliveryStore.recoveryHistory( argumentCollection = arguments );
-        return new megaphone.models.NotificationRecoveryPage(
-            page.results.map( ( row ) => new megaphone.models.NotificationRecoveryReceipt( row ) ),
+        return newNotificationRecoveryPage().configure(
+            page.results.map( ( row ) => newNotificationRecoveryReceipt().configure( row ) ),
             page.hasMore
         );
     }
@@ -328,16 +325,16 @@ component singleton {
             try {
                 var work = getDelivery( arguments.id, true );
                 if ( isNull( work ) ) {
-                    return new megaphone.models.DeliveryRecoveryResult( { "status": "missing" } );
+                    return newDeliveryRecoveryResult().configure( { "status": "missing" } );
                 }
                 var saved = variables.deliveryStore.getRecoveryRequest( arguments.id, arguments.requestKey );
                 if ( isNull( saved ) ) {
                     if ( !canRecover( work ) || getRecoveryVersion( work ) != arguments.expectedVersion ) {
-                        return new megaphone.models.DeliveryRecoveryResult( { "status": "conflict" } );
+                        return newDeliveryRecoveryResult().configure( { "status": "conflict" } );
                     }
                     var ready = arguments.eligibility( work );
                     if ( !isInstanceOf( ready, "megaphone.models.DeliveryPreparation" ) || ready.getStatus() != "ready" ) {
-                        return new megaphone.models.DeliveryRecoveryResult( { "status": "ineligible" } );
+                        return newDeliveryRecoveryResult().configure( { "status": "ineligible" } );
                     }
                 }
                 var values = structCopy( arguments );
@@ -350,7 +347,7 @@ component singleton {
                         arguments.queueAdapter.enqueue( recovery.delivery );
                     }
                 }
-                return new megaphone.models.DeliveryRecoveryResult( recovery );
+                return newDeliveryRecoveryResult().configure( recovery );
             } catch ( any error ) {
                 transactionRollback();
                 rethrow;
@@ -405,7 +402,7 @@ component singleton {
         if ( !isNull( arguments.beforePrune ) ) {
             var observer = arguments.beforePrune;
             values.beforePrune = ( event, rows ) => observer(
-                new megaphone.models.NotificationEvent( event ),
+                newNotificationEvent().configure( event ),
                 rows.map( ( row ) => delivery( row ) )
             );
         }
@@ -423,7 +420,7 @@ component singleton {
     ) {
         var policy = variables.runtime.resolve( "eligibilityPolicy" );
         if ( isNull( policy ) ) {
-            return new megaphone.models.DeliveryPreparation();
+            return newDeliveryPreparation();
         }
         var ready = policy.check( arguments.work, arguments.notifiable, arguments.event );
         if (
@@ -453,7 +450,7 @@ component singleton {
         return settle(
             arguments.work,
             arguments.token,
-            new megaphone.models.DeliveryResult( {
+            newDeliveryResult().configure( {
                 "status": arguments.ready.getStatus() == "deferred" ? "retryable" : arguments.ready.getStatus(),
                 "reason": arguments.ready.getReason(),
                 "retryDate": arguments.ready.getRetryDate()
@@ -488,7 +485,7 @@ component singleton {
      * @returns DeliveryResult
      */
     private DeliveryResult function result( required string status, string reason = "" ) {
-        return new megaphone.models.DeliveryResult( { "status": arguments.status, "reason": arguments.reason } );
+        return newDeliveryResult().configure( { "status": arguments.status, "reason": arguments.reason } );
     }
 
     /**
@@ -500,7 +497,7 @@ component singleton {
         values.notifiableType = values.recipientType;
         values.notifiableId = values.recipientId;
         values.channelName = values.channel;
-        return new megaphone.models.NotificationDelivery( values );
+        return newNotificationDelivery().configure( values );
     }
 
     /**
@@ -522,6 +519,73 @@ component singleton {
             structDelete( values, "channelName" );
         }
         return values;
+    }
+
+    /**
+     * Supplies a fresh DeliveryPreparation using the application's WireBox mapping.
+     * @returns DeliveryPreparation
+     */
+    private DeliveryPreparation function newDeliveryPreparation() provider="DeliveryPreparation@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh DeliveryRecoveryResult using the application's WireBox mapping.
+     * @returns DeliveryRecoveryResult
+     */
+    private DeliveryRecoveryResult function newDeliveryRecoveryResult() provider="DeliveryRecoveryResult@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh DeliveryResult using the application's WireBox mapping.
+     * @returns DeliveryResult
+     */
+    private DeliveryResult function newDeliveryResult() provider="DeliveryResult@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh NotificationDelivery using the application's WireBox mapping.
+     * @returns NotificationDelivery
+     */
+    private NotificationDelivery function newNotificationDelivery() provider="NotificationDelivery@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh NotificationDeliveryAttempt using the application's WireBox mapping.
+     * @returns NotificationDeliveryAttempt
+     */
+    private NotificationDeliveryAttempt function newNotificationDeliveryAttempt()
+        provider="NotificationDeliveryAttempt@megaphone"
+    {
+    }
+
+    /**
+     * Supplies a fresh NotificationDeliveryPage using the application's WireBox mapping.
+     * @returns NotificationDeliveryPage
+     */
+    private NotificationDeliveryPage function newNotificationDeliveryPage() provider="NotificationDeliveryPage@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh NotificationEvent using the application's WireBox mapping.
+     * @returns NotificationEvent
+     */
+    private NotificationEvent function newNotificationEvent() provider="NotificationEvent@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh NotificationRecoveryPage using the application's WireBox mapping.
+     * @returns NotificationRecoveryPage
+     */
+    private NotificationRecoveryPage function newNotificationRecoveryPage() provider="NotificationRecoveryPage@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh NotificationRecoveryReceipt using the application's WireBox mapping.
+     * @returns NotificationRecoveryReceipt
+     */
+    private NotificationRecoveryReceipt function newNotificationRecoveryReceipt()
+        provider="NotificationRecoveryReceipt@megaphone"
+    {
     }
 
 }

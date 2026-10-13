@@ -1,10 +1,10 @@
 /** Declared SDK dependency integration bundle. Java 11+; no network sends. */
-component extends="testbox.system.BaseSpec" {
+component extends="tests.resources.ModuleIntegrationSpec" {
 
     function run() {
         describe( "Real Web Push request preparation", () => {
             beforeEach( () => {
-                variables.factory = new megaphone.models.WebPushClassFactory();
+                variables.factory = getWireBox().getInstance( "WebPushClassFactory@megaphone" );
                 var generator = createObject( "java", "java.security.KeyPairGenerator" ).getInstance( "EC" );
                 generator.initialize(
                     createObject( "java", "java.security.spec.ECGenParameterSpec" ).init( "secp256r1" )
@@ -20,12 +20,14 @@ component extends="testbox.system.BaseSpec" {
                             .create( "com.zerodeplibs.webpush.key.PublicKeySources" )
                             .ofECPublicKey( vapid.getPublic() )
                     );
-                variables.transport = new megaphone.models.WebPushTransport(
-                    classFactory = variables.factory,
-                    vapidKeyPair = variables.keyPair,
-                    subject = "mailto:push@example.test",
-                    allowedHosts = [ "push.example.test", "*.push.example.test" ]
-                );
+                variables.transport = getWireBox()
+                    .getInstance( "WebPushTransport@megaphone" )
+                    .configure(
+                        classFactory = variables.factory,
+                        vapidKeyPair = variables.keyPair,
+                        subject = "mailto:push@example.test",
+                        allowedHosts = [ "push.example.test", "*.push.example.test" ]
+                    );
                 var receiver = generator.generateKeyPair().getPublic();
                 var classes = createObject( "java", "java.lang.Class" );
                 var noTypes = createObject( "java", "java.lang.reflect.Array" ).newInstance(
@@ -58,7 +60,7 @@ component extends="testbox.system.BaseSpec" {
                     { "title": "New audition", "body": "Private preview" },
                     120
                 );
-                var bridge = new megaphone.models.JavaHttpBridge();
+                var bridge = getWireBox().getInstance( "JavaHttpBridge@megaphone" );
                 expect( bridge.requestValue( preparedRequest, "method" ) ).toBe( "POST" );
                 expect( bridge.requestValue( preparedRequest, "uri" ).toString() ).toBe(
                     variables.subscription.endpoint
@@ -154,13 +156,15 @@ component extends="testbox.system.BaseSpec" {
         return repeatString( "0", 64 - len( encoded ) ) & encoded;
     }
     private any function fixtureTransport( required any client ) {
-        return new megaphone.models.WebPushTransport(
-            classFactory = variables.factory,
-            vapidKeyPair = variables.keyPair,
-            subject = "mailto:push@example.test",
-            allowedHosts = [ "push.example.test" ],
-            httpClient = arguments.client
-        );
+        return getWireBox()
+            .getInstance( "WebPushTransport@megaphone" )
+            .configure(
+                classFactory = variables.factory,
+                vapidKeyPair = variables.keyPair,
+                subject = "mailto:push@example.test",
+                allowedHosts = [ "push.example.test" ],
+                httpClient = arguments.client
+            );
     }
     private string function base64url( required any bytes ) {
         return createObject( "java", "java.util.Base64" )

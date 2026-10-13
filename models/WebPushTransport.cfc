@@ -2,9 +2,18 @@
 component {
 
     /**
-     * Validates contact, trusted-host, and timeout settings and captures transport collaborators.
+     * Creates an empty transport for configuration after WireBox injection.
+     * @returns WebPushTransport
      */
-    function init(
+    public WebPushTransport function init() {
+        return this;
+    }
+
+    /**
+     * Validates push settings and configures transport collaborators after WireBox injection.
+     * @returns WebPushTransport
+     */
+    public WebPushTransport function configure(
         required any classFactory,
         required any vapidKeyPair,
         required string subject,
@@ -43,8 +52,8 @@ component {
         variables.subject = arguments.subject;
         variables.allowedHosts = duplicate( arguments.allowedHosts );
         variables.timeoutSeconds = arguments.timeoutSeconds;
-        variables.responsePolicy = new megaphone.models.WebPushResponsePolicy();
-        variables.javaHttp = new megaphone.models.JavaHttpBridge();
+        variables.responsePolicy = newWebPushResponsePolicy();
+        variables.javaHttp = newJavaHttpBridge();
         variables.customClient = !isNull( arguments.httpClient );
         variables.httpClient = variables.javaHttp.newClient( duration() );
         if ( !isNull( arguments.httpClient ) ) {
@@ -197,6 +206,20 @@ component {
      */
     private any function duration() {
         return createObject( "java", "java.time.Duration" ).ofSeconds( javacast( "long", variables.timeoutSeconds ) );
+    }
+
+    /**
+     * Supplies a fresh JavaHttpBridge using the application's WireBox mapping.
+     * @returns JavaHttpBridge
+     */
+    private JavaHttpBridge function newJavaHttpBridge() provider="JavaHttpBridge@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh WebPushResponsePolicy using the application's WireBox mapping.
+     * @returns WebPushResponsePolicy
+     */
+    private WebPushResponsePolicy function newWebPushResponsePolicy() provider="WebPushResponsePolicy@megaphone" {
     }
 
 }

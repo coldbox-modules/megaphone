@@ -10,6 +10,14 @@ component accessors="true" {
      * @returns DeliveryPreparation
      */
     public DeliveryPreparation function init( struct data = {} ) {
+        return configure( argumentCollection = arguments );
+    }
+
+    /**
+     * Configures the DeliveryPreparation after WireBox constructs and injects it.
+     * @returns DeliveryPreparation
+     */
+    public DeliveryPreparation function configure( struct data = {} ) {
         variables.status = "ready";
         variables.reason = "";
         variables.data = {};

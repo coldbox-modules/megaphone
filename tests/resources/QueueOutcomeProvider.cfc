@@ -17,20 +17,30 @@ component extends="megaphone.models.Providers.BaseProvider" {
         required any notification,
         required any delivery
     ) {
-        return new megaphone.models.DeliveryPreparation();
+        return newDeliveryPreparation();
     }
     public megaphone.models.DeliveryResult function sendDelivery( required any prepared, required any delivery ) {
         variables.sendCount++;
         if ( variables.outcome == "throw" ) {
             throw( type = "QueueTransportUnknown", message = "Unknown acceptance" );
         }
-        return new megaphone.models.DeliveryResult( { "status": variables.outcome } );
+        return newDeliveryResult().configure( { "status": variables.outcome } );
     }
     public numeric function getSendCount() {
         return variables.sendCount;
     }
     public void function setOutcome( required string outcome ) {
         variables.outcome = arguments.outcome;
+    }
+
+    /** Supplies a fresh DeliveryPreparation through WireBox. */
+    private megaphone.models.DeliveryPreparation function newDeliveryPreparation()
+        provider="DeliveryPreparation@megaphone"
+    {
+    }
+
+    /** Supplies a fresh DeliveryResult through WireBox. */
+    private megaphone.models.DeliveryResult function newDeliveryResult() provider="DeliveryResult@megaphone" {
     }
 
 }

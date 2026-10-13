@@ -9,10 +9,18 @@ component accessors="true" {
      * Loads a recovery result and wraps its receipt as a public object.
      * @returns DeliveryRecoveryResult
      */
-    public DeliveryRecoveryResult function init( required struct data ) {
+    public DeliveryRecoveryResult function init( struct data = {} ) {
+        return configure( argumentCollection = arguments );
+    }
+
+    /**
+     * Configures the DeliveryRecoveryResult after WireBox constructs and injects it.
+     * @returns DeliveryRecoveryResult
+     */
+    public DeliveryRecoveryResult function configure( required struct data ) {
         for ( var key in arguments.data ) {
             if ( !isNull( arguments.data[ key ] ) ) {
-                variables[ key ] = key == "receipt" ? new megaphone.models.NotificationRecoveryReceipt(
+                variables[ key ] = key == "receipt" ? newNotificationRecoveryReceipt().configure(
                     arguments.data[ key ]
                 ) : arguments.data[ key ];
             }
@@ -35,6 +43,15 @@ component accessors="true" {
             result.delivery = variables.delivery.getMemento();
         }
         return result;
+    }
+
+    /**
+     * Supplies a fresh NotificationRecoveryReceipt using the application's WireBox mapping.
+     * @returns NotificationRecoveryReceipt
+     */
+    private NotificationRecoveryReceipt function newNotificationRecoveryReceipt()
+        provider="NotificationRecoveryReceipt@megaphone"
+    {
     }
 
 }

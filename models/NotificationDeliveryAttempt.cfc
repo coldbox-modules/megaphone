@@ -14,7 +14,15 @@ component accessors="true" {
      * Copies attempt history into the public attempt object.
      * @returns NotificationDeliveryAttempt
      */
-    public NotificationDeliveryAttempt function init( required struct data ) {
+    public NotificationDeliveryAttempt function init( struct data = {} ) {
+        return configure( argumentCollection = arguments );
+    }
+
+    /**
+     * Configures the NotificationDeliveryAttempt after WireBox constructs and injects it.
+     * @returns NotificationDeliveryAttempt
+     */
+    public NotificationDeliveryAttempt function configure( required struct data ) {
         for (
             var key in listToArray( "id,deliveryId,number,leaseToken,outcome,providerReference,reason,startedDate,transportStartedDate,finishedDate" )
         ) {

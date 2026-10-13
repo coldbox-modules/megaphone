@@ -11,6 +11,14 @@ component accessors="true" {
      * @returns DeliveryResult
      */
     public DeliveryResult function init( struct data = {} ) {
+        return configure( argumentCollection = arguments );
+    }
+
+    /**
+     * Configures the DeliveryResult after WireBox constructs and injects it.
+     * @returns DeliveryResult
+     */
+    public DeliveryResult function configure( struct data = {} ) {
         variables.status = "ambiguous";
         variables.reason = "";
         variables.providerReference = "";

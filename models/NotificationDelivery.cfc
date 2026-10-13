@@ -29,6 +29,14 @@ component accessors="true" {
      * @returns NotificationDelivery
      */
     public NotificationDelivery function init( struct data = {} ) {
+        return configure( argumentCollection = arguments );
+    }
+
+    /**
+     * Configures the NotificationDelivery after WireBox constructs and injects it.
+     * @returns NotificationDelivery
+     */
+    public NotificationDelivery function configure( struct data = {} ) {
         variables.attributes = duplicate( arguments.data.attributes ?: {} );
         for ( var key in arguments.data ) {
             if (

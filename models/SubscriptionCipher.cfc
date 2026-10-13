@@ -4,7 +4,18 @@ component {
     /**
      * Validates the active AES-256 storage key and the retained decryption keyring.
      */
-    function init( required string activeKeyId, required struct keys ) {
+    public SubscriptionCipher function init( string activeKeyId = "", struct keys = {} ) {
+        if ( !len( arguments.activeKeyId ) && arguments.keys.isEmpty() ) {
+            return this;
+        }
+        return configure( argumentCollection = arguments );
+    }
+
+    /**
+     * Configures the SubscriptionCipher after WireBox constructs and injects it.
+     * @returns SubscriptionCipher
+     */
+    public SubscriptionCipher function configure( required string activeKeyId, required struct keys ) {
         variables.activeKeyId = arguments.activeKeyId;
         variables.keys = {};
         for ( var id in arguments.keys ) {

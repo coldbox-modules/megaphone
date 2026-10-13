@@ -17,7 +17,15 @@ component accessors="true" {
      * Copies persisted recovery receipt fields into the public receipt object.
      * @returns NotificationRecoveryReceipt
      */
-    public NotificationRecoveryReceipt function init( required struct data ) {
+    public NotificationRecoveryReceipt function init( struct data = {} ) {
+        return configure( argumentCollection = arguments );
+    }
+
+    /**
+     * Configures the NotificationRecoveryReceipt after WireBox constructs and injects it.
+     * @returns NotificationRecoveryReceipt
+     */
+    public NotificationRecoveryReceipt function configure( required struct data ) {
         for (
             var key in listToArray( "id,deliveryId,requestKey,intentHash,actorId,actorLabel,priorState,priorAttemptCount,priorTransportCount,priorReason,priorProviderReference,additionalAttempts,createdDate" )
         ) {

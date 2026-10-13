@@ -16,9 +16,23 @@ component accessors="true" {
         any admitAfter,
         struct queueOptions = {}
     ) {
+        return configure( argumentCollection = arguments );
+    }
+
+    /**
+     * Configures the NotificationPlan after WireBox constructs and injects it.
+     * @returns NotificationPlan
+     */
+    public NotificationPlan function configure(
+        struct event = {},
+        array deliveries = [],
+        any admitAfter,
+        struct queueOptions = {}
+    ) {
         variables.queueOptions = duplicate( arguments.queueOptions );
         variables.event = duplicate( arguments.event );
         variables.deliveries = duplicate( arguments.deliveries );
+        structDelete( variables, "admitAfter" );
         if ( !isNull( arguments.admitAfter ) ) {
             variables.admitAfter = arguments.admitAfter;
         }

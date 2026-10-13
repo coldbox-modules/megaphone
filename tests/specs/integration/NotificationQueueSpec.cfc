@@ -62,9 +62,9 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                     variables.options
                 );
                 expect( variables.deliveries.getDueDeliveries() ).toBeEmpty();
-                var restored = new megaphone.models.NotificationPlan().populateFromMemento(
-                    deserializeJSON( serializeJSON( plan.getMemento() ) )
-                );
+                var restored = getWireBox()
+                    .getInstance( "NotificationPlan@megaphone" )
+                    .populateFromMemento( deserializeJSON( serializeJSON( plan.getMemento() ) ) );
                 var publication = variables.service.queuePlan( restored );
                 expect( publication.getEvent().getCreated() ).toBeTrue();
                 expect( publication.getDeliveries()[ 1 ].getState() ).toBe( "suppressed" );
@@ -95,9 +95,9 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                     {},
                     options
                 );
-                var restored = new megaphone.models.NotificationPlan().populateFromMemento(
-                    deserializeJSON( serializeJSON( old.getMemento() ) )
-                );
+                var restored = getWireBox()
+                    .getInstance( "NotificationPlan@megaphone" )
+                    .populateFromMemento( deserializeJSON( serializeJSON( old.getMemento() ) ) );
                 expect(
                     variables.service
                         .queuePlan( restored )

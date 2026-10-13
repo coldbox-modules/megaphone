@@ -95,7 +95,7 @@ component singleton accessors="true" {
             );
         }
         event.payloadHash = runtime.digest( event.payload, { "namespace": event.namespace, "kind": "payload" } );
-        var plan = new megaphone.models.NotificationPlan(
+        var plan = newNotificationPlan().configure(
             event,
             [],
             arguments.options.admitAfter ?: javacast( "null", "" ),
@@ -103,7 +103,7 @@ component singleton accessors="true" {
         );
         if ( !isNull( arguments.options.admitAfter ) && dateCompare( occurredAt, arguments.options.admitAfter ) < 0 ) {
             event.expired = true;
-            plan = new megaphone.models.NotificationPlan(
+            plan = newNotificationPlan().configure(
                 event,
                 [],
                 arguments.options.admitAfter,
@@ -175,7 +175,7 @@ component singleton accessors="true" {
                 }
             }
         }
-        return new megaphone.models.NotificationPlan(
+        return newNotificationPlan().configure(
             event,
             intents,
             arguments.options.admitAfter ?: javacast( "null", "" ),
@@ -221,9 +221,7 @@ component singleton accessors="true" {
                 captured.admitAfter
             ) < 0
         ) {
-            return new megaphone.models.NotificationPublication(
-                new megaphone.models.NotificationEvent( { "expired": true } )
-            );
+            return newNotificationPublication().configure( newNotificationEvent().configure( { "expired": true } ) );
         }
         var queueAdapter = newNotificationRuntime().resolve( "queueAdapter" );
         var service = newDeliveryService();
@@ -231,7 +229,7 @@ component singleton accessors="true" {
             try {
                 var event = service.recordEvent( argumentCollection = captured.event );
                 if ( !event.getCreated() ) {
-                    return new megaphone.models.NotificationPublication(
+                    return newNotificationPublication().configure(
                         event,
                         service.getDeliveriesForEvent( event.getId() )
                     );
@@ -246,7 +244,7 @@ component singleton accessors="true" {
                         queueAdapter.enqueue( argumentCollection = enqueueArguments );
                     }
                 }
-                return new megaphone.models.NotificationPublication( event, deliveries );
+                return newNotificationPublication().configure( event, deliveries );
             } catch ( any error ) {
                 transactionRollback();
                 rethrow;
@@ -356,6 +354,27 @@ component singleton accessors="true" {
      * @returns any
      */
     private any function newDeliveryService() provider="NotificationDeliveryService@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh NotificationEvent using the application's WireBox mapping.
+     * @returns NotificationEvent
+     */
+    private NotificationEvent function newNotificationEvent() provider="NotificationEvent@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh NotificationPlan using the application's WireBox mapping.
+     * @returns NotificationPlan
+     */
+    private NotificationPlan function newNotificationPlan() provider="NotificationPlan@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh NotificationPublication using the application's WireBox mapping.
+     * @returns NotificationPublication
+     */
+    private NotificationPublication function newNotificationPublication() provider="NotificationPublication@megaphone" {
     }
 
 }

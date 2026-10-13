@@ -16,6 +16,8 @@
 
 ## API alignment
 
+- Model instances and push collaborators use WireBox method providers; application overrides keep their constructor dependencies when captured data is configured.
+
 - NotificationPlan defaults its event and deliveries to empty values, so saved plans can be restored with a no-argument constructor.
 
 - cbq is an optional application dependency. Using the cbq adapter without cbq throws `Megaphone.Queue.MissingCBQ`; synchronous notifications, custom adapters, and polling do not require it.

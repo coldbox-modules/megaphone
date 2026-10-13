@@ -17,6 +17,14 @@ component accessors="true" {
      * @returns NotificationEvent
      */
     public NotificationEvent function init( struct data = {} ) {
+        return configure( argumentCollection = arguments );
+    }
+
+    /**
+     * Configures the NotificationEvent after WireBox constructs and injects it.
+     * @returns NotificationEvent
+     */
+    public NotificationEvent function configure( struct data = {} ) {
         variables.id = "";
         variables.created = false;
         variables.expired = false;

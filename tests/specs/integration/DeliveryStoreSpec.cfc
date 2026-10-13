@@ -15,6 +15,24 @@ component extends="tests.specs.integration.EventStoreSpec" {
             .getBinder()
             .map( "NotificationDeliveryService@megaphone" )
             .to( "megaphone.models.NotificationDeliveryService" );
+        for (
+            var name in [
+                "NotificationEvent",
+                "NotificationDelivery",
+                "NotificationDeliveryPage",
+                "NotificationDeliveryAttempt",
+                "NotificationRecoveryPage",
+                "NotificationRecoveryReceipt",
+                "DeliveryRecoveryResult",
+                "DeliveryPreparation",
+                "DeliveryResult"
+            ]
+        ) {
+            variables.injector
+                .getBinder()
+                .map( name & "@megaphone" )
+                .to( "megaphone.models." & name );
+        }
         variables.operations = variables.injector.getInstance( "NotificationDeliveryService@megaphone" );
     }
 

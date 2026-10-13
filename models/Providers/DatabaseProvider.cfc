@@ -15,7 +15,7 @@ component extends="BaseProvider" accessors="true" {
             .getInstance( "NotificationDeliveryService@megaphone" )
             .getEvent( arguments.delivery.getEventId() );
         var context = arguments.notification.getDeliveryContext( arguments.notifiable, getName() );
-        return new megaphone.models.DeliveryPreparation( {
+        return newDeliveryPreparation().configure( {
             "data": {
                 "notifiable": arguments.notifiable,
                 "notificationType": arguments.notification.getNotificationType(),
@@ -48,7 +48,7 @@ component extends="BaseProvider" accessors="true" {
                 groupKey = data.groupKey,
                 channelName = getName()
             );
-        return new megaphone.models.DeliveryResult( { "status": "accepted", "providerReference": entry.getId() } );
+        return newDeliveryResult().configure( { "status": "accepted", "providerReference": entry.getId() } );
     }
 
     /**
@@ -164,6 +164,20 @@ component extends="BaseProvider" accessors="true" {
      * @returns QueryBuilder
      */
     private QueryBuilder function newQueryBuilder() provider="QueryBuilder@qb" {
+    }
+
+    /**
+     * Supplies a fresh DeliveryPreparation using the application's WireBox mapping.
+     * @returns DeliveryPreparation
+     */
+    private DeliveryPreparation function newDeliveryPreparation() provider="DeliveryPreparation@megaphone" {
+    }
+
+    /**
+     * Supplies a fresh DeliveryResult using the application's WireBox mapping.
+     * @returns DeliveryResult
+     */
+    private DeliveryResult function newDeliveryResult() provider="DeliveryResult@megaphone" {
     }
 
 }

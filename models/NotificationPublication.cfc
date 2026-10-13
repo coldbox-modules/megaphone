@@ -7,7 +7,19 @@ component accessors="true" {
      * Captures the persisted event and delivery objects returned by queueing.
      * @returns NotificationPublication
      */
-    public NotificationPublication function init( required NotificationEvent event, array deliveries = [] ) {
+    public NotificationPublication function init( NotificationEvent event, array deliveries = [] ) {
+        if ( isNull( arguments.event ) ) {
+            variables.deliveries = [];
+            return this;
+        }
+        return configure( argumentCollection = arguments );
+    }
+
+    /**
+     * Configures the NotificationPublication after WireBox constructs and injects it.
+     * @returns NotificationPublication
+     */
+    public NotificationPublication function configure( required NotificationEvent event, array deliveries = [] ) {
         variables.event = arguments.event;
         variables.deliveries = arguments.deliveries;
         return this;
