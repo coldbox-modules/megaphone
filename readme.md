@@ -429,7 +429,7 @@ publication.getDeliveries()[1].getId();
 
 Options are `namespace` (default `megaphone`), `eventKey` (generated if omitted), `version` (1), `occurredAt` and `availableDate` (now), and optional `admitAfter`. Occurrences older than the cutoff return an expired publication without recording work. Equality is admitted.
 
-Persist `plan.getMemento()` when admission must precede worker handoff. Restore it with `new megaphone.models.NotificationPlan({}, []).populateFromMemento(saved)` and call `queuePlan(plan)`. Its version 1 memento contains `event`, `deliveries`, and optional `admitAfter`. It preserves identities, payloads, hashes, destinations, and channel choices. A trusted producer may use `queuePlan(plan, alreadyAdmitted=true)` after validating its original persisted admission. This bypasses the replay cutoff; it does not replan the audience.
+Persist `plan.getMemento()` when admission must precede worker handoff. Restore it with `new megaphone.models.NotificationPlan({}, []).populateFromMemento(saved)` and call `queuePlan(plan)`. Its version 1 memento contains `event`, `deliveries`, and optional `admitAfter` and `queueOptions`. The latter retains explicit `connection` and `queue` choices for handoff. It preserves identities, payloads, hashes, destinations, and channel choices. A trusted producer may use `queuePlan(plan, alreadyAdmitted=true)` after validating its original persisted admission. This bypasses the replay cutoff; it does not replan the audience.
 
 Notifications extend `BaseNotification`, implement `via(notifiable)` and the usual `to{Provider}` methods, and may override `getChannelPreferences(notifiable)` to return a channel-name map of `{ enabled, source }`. The default enables the channels returned by `via()`. Synchronous delivery skips disabled channels. Durable delivery records them as suppressed; later opt-in does not revive them.
 
@@ -449,7 +449,7 @@ moduleSettings.megaphone = {
     },
     "durable": {
         "queueAdapter": "CBQNotificationQueue@megaphone",
-        "queueConnection": "default", "queueName": "notifications", "queueTimeout": 60,
+        "queueConnection": "",
         "notifiableResolver": "NotifiableResolver",
         "eligibilityPolicy": "NotificationEligibility",
         "snapshotHasher": "NotificationSnapshotHasher@megaphone",
@@ -461,13 +461,13 @@ moduleSettings.megaphone = {
 
 Storage settings accept `table`, `queryOptions`, and `datasource`. Deliveries also accept `attemptsTable`, `eventsTable`, and `recoveriesTable`; subscriptions accept `exclusionsTable`. Adapt migrations when using custom table names, and keep related table settings consistent. New public APIs use `notifiableType`, `notifiableId`, and `channelName`; existing storage columns remain unchanged.
 
-Megaphone includes cbq and uses `CBQNotificationQueue@megaphone` by default. It inserts a `NotificationDeliveryJob@megaphone` containing only the delivery ID, on the `default` connection's `notifications` queue. Configure `durable.queueConnection`, `queueName`, and `queueTimeout` to change those defaults. The job gets one cbq attempt; Megaphone schedules another job only for a known retryable, deferred, or busy outcome. Ambiguous acceptance never triggers another send.
+Megaphone includes cbq and uses `CBQNotificationQueue@megaphone` by default. It dispatches a `NotificationDeliveryJob@megaphone` containing only the delivery ID, using cbq's registered default connection and that connection's default queue. cbq uses the Provider configured on that connection. Set `durable.queueConnection` to use another registered connection. Pass `connection` and `queue` to `plan()`, `queue()`, or `queuePlan()` to choose a route for a particular call. cbq supplies the queue and worker defaults. The job starts with one cbq attempt. After a known retryable, deferred, or busy outcome, Megaphone allows one more attempt and releases the job through cbq with the saved availability or lease delay. The registered Provider handles backoff; unhandled errors receive no automatic extra attempt. Ambiguous acceptance never triggers another send.
 
-If your application has no cbq configuration, the bundled configuration uses the delivery store's query options for a database connection. It defines one worker when a notifiable resolver is configured. Synchronous-only applications don't start durable workers or need queue tables. Existing cbq configurations are kept; add a worker for the notification queue in your application config.
+Register your connections and worker pools through your application's cbq config. Megaphone keeps those registrations and does not select or create a queue Provider. An empty `durable.queueConnection` uses cbq's default connection; set it to a registered connection name to override that choice. Applications that only use synchronous notifications can start without registering a queue.
 
-Apply cbq's bundled migrations through your migration ledger before queueing, on the same datasource as the Megaphone delivery records. Megaphone's migrations do not create cbq tables. A database job insertion failure rolls back publication.
+Follow your queue Provider's setup instructions. A database queue on the same datasource can join the publication transaction. External queues cannot roll back published jobs with database writes, so arrange the commit handoff before workers consume delivery IDs. A synchronous Provider executes the job inline. An enqueue failure rolls back Megaphone's event and deliveries, subject to the selected Provider's external effects.
 
-You can still provide a custom `durable.queueAdapter` implementing `enqueue(delivery)`. It should insert only the delivery ID in that same transaction and send from a worker. Explicitly set the adapter to an empty string if a scheduled worker polls `getDueDeliveries()` and `recoverExpired()` instead.
+You can still provide a custom `durable.queueAdapter` implementing `enqueue(delivery, connection, queue)`. The optional connection and queue arguments are forwarded when supplied by the caller. It should queue only the delivery ID and preserve the selected queue's transaction and handoff semantics. Explicitly set the adapter to an empty string if a scheduled worker polls `getDueDeliveries()` and `recoverExpired()` instead.
 
 A notifiable resolver implements `resolve(type, id)` and returns the matching current notifiable or null. An optional `deliveryPolicy` mapping implements `getDispatchOptions(id)` to provide lease, attempt, and retry options; explicit dispatch options take precedence.
 

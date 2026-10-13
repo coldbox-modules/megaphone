@@ -17,9 +17,7 @@ component {
             },
             "durable": {
                 "queueAdapter": "CBQNotificationQueue@megaphone",
-                "queueConnection": "default",
-                "queueName": "notifications",
-                "queueTimeout": 60,
+                "queueConnection": "",
                 "notifiableResolver": "",
                 "eligibilityPolicy": "",
                 "snapshotHasher": "",
@@ -39,9 +37,7 @@ component {
         param settings.storage = {};
         param settings.durable = {};
         param settings.durable.queueAdapter = "CBQNotificationQueue@megaphone";
-        param settings.durable.queueConnection = "default";
-        param settings.durable.queueName = "notifications";
-        param settings.durable.queueTimeout = 60;
+        param settings.durable.queueConnection = "";
         param settings.durable.leaseSeconds = 60;
         param settings.durable.maxAttempts = 5;
         param settings.durable.retrySeconds = 30;

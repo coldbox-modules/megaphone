@@ -26,9 +26,9 @@ component extends="tests.resources.ModuleIntegrationSpec" {
         describe( "Bundled cbq notification queue", () => {
             beforeEach( () => {
                 variables.savedSettings = duplicate( variables.settings.durable );
+                variables.savedConnection = variables.config.getDefaultConnectionName();
                 variables.settings.durable.queueAdapter = "CBQNotificationQueue@megaphone";
                 variables.settings.durable.queueConnection = "default";
-                variables.settings.durable.queueName = "notifications";
                 variables.settings.durable.notifiableResolver = "QueueNotifiableResolver";
                 variables.settings.durable.eligibilityPolicy = "QueueEligibilityPolicy";
                 variables.owner = new tests.resources.InboxRecipient();
@@ -39,16 +39,16 @@ component extends="tests.resources.ModuleIntegrationSpec" {
             } );
             afterEach( () => {
                 variables.settings.durable = variables.savedSettings;
+                variables.config.setDefaultConnectionName( variables.savedConnection );
             } );
 
-            it( "activates cbq with a bundled database connection and no synchronous-only workers", () => {
+            it( "uses the application cbq configuration without adding connections or workers", () => {
                 expect( variables.bootAdapter ).toBe( "CBQNotificationQueue@megaphone" );
                 expect(
                     variables.config
                         .getConnection( "default" )
                         .getProvider()
                         .getProperties()
-                        .queryOptions
                         .datasource
                 ).toBe( "megaphone" );
                 expect( variables.config.getWorkerPools() ).toBeEmpty();
@@ -67,6 +67,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                 expect( payload.properties.keyArray() ).toBe( [ "deliveryId" ] );
                 expect( payload.properties.deliveryId ).toBe( publication.getDeliveries()[ 1 ].getId() );
                 expect( payload.maxAttempts ).toBe( 1 );
+                expect( isNull( payload.timeout ) ).toBeTrue();
                 var job = deserializeJob( rows.payload[ 1 ] );
                 expect( job.handle() ).toBe( "accepted" );
                 expect( job.handle() ).toBe( "accepted" );
@@ -126,17 +127,89 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                 expect( variables.deliveries.getDueDeliveries() ).toBeEmpty();
                 expect( jobs().recordCount ).toBe( 0 );
             } );
-            it( "rejects a synchronous cbq connection before transport or publication", () => {
-                variables.config.registerConnection( name = "notification-sync", provider = "SyncProvider@cbq" );
-                variables.settings.durable.queueConnection = "notification-sync";
-                expect( () => variables.service.queue(
+            it( "uses a registered non-database provider on cbq's default connection", () => {
+                var provider = getWireBox().getInstance( "tests.resources.RegisteredQueueProvider" );
+                variables.config.registerConnection(
+                    name = "registered-notifications",
+                    provider = provider,
+                    defaultQueue = "alerts"
+                );
+                variables.config.setDefaultConnectionName( "registered-notifications" );
+                variables.settings.durable.queueConnection = "";
+                var publication = variables.service.queue(
                     variables.owner,
                     "QueueNotification",
                     {},
                     variables.options
-                ) ).toThrow( "Megaphone.Configuration.InvalidQueueProvider" );
-                expect( variables.deliveries.getDueDeliveries() ).toBeEmpty();
+                );
+                var entries = provider.getEntries();
+                expect( entries.len() ).toBe( 1 );
+                expect( entries[ 1 ].queueName ).toBe( "alerts" );
                 expect( jobs().recordCount ).toBe( 0 );
+                var payload = deserializeJSON( entries[ 1 ].payload );
+                expect( payload.properties.keyArray() ).toBe( [ "deliveryId" ] );
+                expect( payload.properties.deliveryId ).toBe( publication.getDeliveries()[ 1 ].getId() );
+                expect( payload.maxAttempts ).toBe( 1 );
+                expect( provider.deserializeJob( entries[ 1 ].payload, 1 ).handle() ).toBe( "accepted" );
+            } );
+            it( "delegates inline execution to a registered synchronous provider", () => {
+                variables.config.registerConnection(
+                    name = "notification-sync",
+                    provider = "SyncProvider@cbq",
+                    defaultQueue = "notifications"
+                );
+                var pool = variables.config.registerWorkerPool(
+                    name = "notification-sync-test",
+                    connectionName = "notification-sync",
+                    queue = "notifications",
+                    maxAttempts = 1
+                );
+                try {
+                    variables.settings.durable.queueConnection = "notification-sync";
+                    var publication = variables.service.queue(
+                        variables.owner,
+                        "QueueNotification",
+                        {},
+                        variables.options
+                    );
+                    var work = variables.deliveries.getDelivery( publication.getDeliveries()[ 1 ].getId() );
+                    expect( work.getState() ).toBe( "accepted" );
+                    expect( work.getTransportCount() ).toBe( 1 );
+                    expect( jobs().recordCount ).toBe( 0 );
+                } finally {
+                    pool.shutdown( true );
+                }
+            } );
+            it( "uses synchronous provider backoff and stops at Megaphone's transport budget", () => {
+                var provider = outcomeProvider( "retryable" );
+                variables.settings.durable.maxAttempts = 2;
+                variables.settings.durable.retrySeconds = 1;
+                variables.config.registerConnection(
+                    name = "notification-sync-retry",
+                    provider = "SyncProvider@cbq",
+                    defaultQueue = "notifications"
+                );
+                var pool = variables.config.registerWorkerPool(
+                    name = "notification-sync-retry-test",
+                    connectionName = "notification-sync-retry",
+                    queue = "notifications",
+                    maxAttempts = 1
+                );
+                try {
+                    variables.settings.durable.queueConnection = "notification-sync-retry";
+                    var publication = variables.service.queue(
+                        variables.owner,
+                        "QueueNotification",
+                        {},
+                        variables.options
+                    );
+                    var work = variables.deliveries.getDelivery( publication.getDeliveries()[ 1 ].getId() );
+                    expect( work.getTransportCount() ).toBe( 2 );
+                    expect( provider.getSendCount() ).toBe( 2 );
+                    expect( work.getState() ).toBe( "permanent" );
+                } finally {
+                    pool.shutdown( true );
+                }
             } );
             it( "supports a renamed queue and connection", () => {
                 variables.config.registerConnection(
@@ -144,13 +217,13 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                     provider = "DBProvider@cbq",
                     properties = { "datasource": "megaphone" }
                 );
-                variables.settings.durable.queueConnection = "notification-test";
-                variables.settings.durable.queueName = "custom-notifications";
                 variables.service.queue(
-                    variables.owner,
-                    "QueueNotification",
-                    {},
-                    variables.options
+                    notifiables = variables.owner,
+                    notification = "QueueNotification",
+                    properties = {},
+                    options = variables.options,
+                    connection = "notification-test",
+                    queue = "custom-notifications"
                 );
                 expect(
                     queryExecute(
@@ -159,6 +232,65 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                         { "datasource": "megaphone" }
                     ).total[ 1 ]
                 ).toBe( 1 );
+            } );
+            it( "uses cbq defaults when only one route argument is supplied", () => {
+                var provider = getWireBox().getInstance( "tests.resources.RegisteredQueueProvider" );
+                variables.config.registerConnection(
+                    name = "route-defaults",
+                    provider = provider,
+                    defaultQueue = "connection-default"
+                );
+                variables.service.queue(
+                    notifiables = variables.owner,
+                    notification = "QueueNotification",
+                    connection = "route-defaults"
+                );
+                expect( provider.getEntries()[ 1 ].queueName ).toBe( "connection-default" );
+                variables.settings.durable.queueConnection = "route-defaults";
+                variables.service.queue(
+                    notifiables = variables.owner,
+                    notification = new tests.resources.QueueNotification(),
+                    queue = "call-queue"
+                );
+                expect( provider.getEntries()[ 2 ].queueName ).toBe( "call-queue" );
+                expect( jobs().recordCount ).toBe( 0 );
+            } );
+            it( "keeps the selected connection and queue in a restored plan and allows handoff overrides", () => {
+                var firstProvider = getWireBox().getInstance( "tests.resources.RegisteredQueueProvider" );
+                var secondProvider = getWireBox().getInstance( "tests.resources.RegisteredQueueProvider" );
+                variables.config.registerConnection(
+                    name = "planned",
+                    provider = firstProvider,
+                    defaultQueue = "first-default"
+                );
+                variables.config.registerConnection(
+                    name = "handoff",
+                    provider = secondProvider,
+                    defaultQueue = "second-default"
+                );
+                variables.settings.durable.queueConnection = "missing-notification-connection";
+                var plan = variables.service.plan(
+                    notifiables = variables.owner,
+                    notification = "QueueNotification",
+                    options = variables.options,
+                    connection = "planned",
+                    queue = "saved-queue"
+                );
+                var saved = deserializeJSON( serializeJSON( plan.getMemento() ) );
+                var restored = new megaphone.models.NotificationPlan( {}, [] ).populateFromMemento( saved );
+                expect( restored.getQueueOptions() ).toBe( { "connection": "planned", "queue": "saved-queue" } );
+                variables.service.queuePlan( restored );
+                expect( firstProvider.getEntries()[ 1 ].queueName ).toBe( "saved-queue" );
+                saved.event.eventKey = createUUID();
+                restored.populateFromMemento( saved );
+                variables.service.queuePlan( plan = restored, connection = "handoff", queue = "handoff-queue" );
+                expect( secondProvider.getEntries()[ 1 ].queueName ).toBe( "handoff-queue" );
+                variables.service.queuePlan( plan = restored, connection = "planned", queue = "another-queue" );
+                expect( firstProvider.getEntries().len() ).toBe( 1 );
+                expect( secondProvider.getEntries().len() ).toBe( 1 );
+                structDelete( saved, "queueOptions" );
+                restored.populateFromMemento( saved );
+                expect( restored.getQueueOptions() ).toBeEmpty();
             } );
             it( "allows a custom adapter or explicit polling without cbq jobs", () => {
                 var adapter = new tests.resources.DurableQueueFixture();
@@ -198,19 +330,22 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                     {},
                     variables.options
                 );
-                expect( deserializeJob( jobs().payload[ 1 ] ).handle() ).toBe( "retryable" );
-                var rows = jobs();
-                expect( rows.recordCount ).toBe( 2 );
+                var job = deserializeJob( jobs().payload[ 1 ] );
+                expect( job.handle() ).toBe( "retryable" );
+                expect( job.getIsReleased() ).toBeTrue();
+                expect( job.getMaxAttempts() ).toBe( 2 );
+                expect( job.getBackoff() ).toBeGTE( 28 );
+                expect( jobs().recordCount ).toBe( 1 );
                 expect( provider.getSendCount() ).toBe( 1 );
-                expect( rows.availableDate[ 2 ] - rows.createdDate[ 2 ] ).toBeGTE( 28 );
                 expect(
                     variables.deliveries.getDelivery( publication.getDeliveries()[ 1 ].getId() ).getTransportCount()
                 ).toBe( 1 );
             } );
-            it( "defines a default worker when durable resolution is configured", () => {
+            it( "does not choose a provider when the application has no cbq configuration", () => {
                 var config = getWireBox().getInstance( "CBQConfig@megaphone" );
                 config.configure();
-                expect( config.getWorkerPoolDefinitions().keyExists( "megaphone" ) ).toBeTrue();
+                expect( config.getConnectionDefinitions() ).toBeEmpty();
+                expect( config.getWorkerPoolDefinitions() ).toBeEmpty();
             } );
             it( "reschedules deferred policy checks without consuming a transport", () => {
                 var publication = variables.service.queue(
@@ -220,8 +355,10 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                     variables.options
                 );
                 variables.policy.setStatus( "deferred" );
-                expect( deserializeJob( jobs().payload[ 1 ] ).handle() ).toBe( "retryable" );
-                expect( jobs().recordCount ).toBe( 2 );
+                var job = deserializeJob( jobs().payload[ 1 ] );
+                expect( job.handle() ).toBe( "retryable" );
+                expect( job.getIsReleased() ).toBeTrue();
+                expect( jobs().recordCount ).toBe( 1 );
                 expect(
                     variables.deliveries.getDelivery( publication.getDeliveries()[ 1 ].getId() ).getTransportCount()
                 ).toBe( 0 );
@@ -236,10 +373,12 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                 getWireBox()
                     .getInstance( "DeliveryStore@megaphone" )
                     .claim( publication.getDeliveries()[ 1 ].getId(), 120, 5 );
-                expect( deserializeJob( jobs().payload[ 1 ] ).handle() ).toBe( "busy" );
+                var job = deserializeJob( jobs().payload[ 1 ] );
+                expect( job.handle() ).toBe( "busy" );
+                expect( job.getIsReleased() ).toBeTrue();
                 var rows = jobs();
-                expect( rows.recordCount ).toBe( 2 );
-                expect( rows.availableDate[ 2 ] - rows.createdDate[ 2 ] ).toBeGTE( 118 );
+                expect( rows.recordCount ).toBe( 1 );
+                expect( job.getBackoff() ).toBeGTE( 118 );
                 expect(
                     variables.deliveries.getDelivery( publication.getDeliveries()[ 1 ].getId() ).getTransportCount()
                 ).toBe( 0 );
@@ -279,7 +418,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
         return variables.config
             .getConnection( variables.settings.durable.queueConnection )
             .getProvider()
-            .deserializeJob( arguments.payload, 1 );
+            .deserializeJob( arguments.payload, 1, 1 );
     }
     private any function outcomeProvider( required string status ) {
         variables.service.registerChannels( { "database": { "provider": "QueueOutcomeProvider", "properties": {} } } );

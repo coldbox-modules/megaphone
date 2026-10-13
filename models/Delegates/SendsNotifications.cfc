@@ -5,14 +5,12 @@ component {
     public NotificationPublication function queue(
         required any notification,
         struct properties = {},
-        struct options = {}
+        struct options = {},
+        string connection,
+        string queue
     ) {
-        return variables.notificationService.queue(
-            $parent,
-            arguments.notification,
-            arguments.properties,
-            arguments.options
-        );
+        arguments.notifiables = $parent;
+        return variables.notificationService.queue( argumentCollection = arguments );
     }
 
     public BaseNotification function notify( required any notification, struct properties = {} ) {

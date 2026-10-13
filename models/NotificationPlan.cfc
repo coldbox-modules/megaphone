@@ -4,8 +4,15 @@ component accessors="true" {
     property name="event" setter="false";
     property name="deliveries" setter="false";
     property name="admitAfter" setter="false";
+    property name="queueOptions" setter="false";
 
-    public NotificationPlan function init( required struct event, required array deliveries, any admitAfter ) {
+    public NotificationPlan function init(
+        required struct event,
+        required array deliveries,
+        any admitAfter,
+        struct queueOptions = {}
+    ) {
+        variables.queueOptions = duplicate( arguments.queueOptions );
         variables.event = duplicate( arguments.event );
         variables.deliveries = duplicate( arguments.deliveries );
         if ( !isNull( arguments.admitAfter ) ) {
@@ -22,6 +29,7 @@ component accessors="true" {
         ) {
             throw( type = "Megaphone.Notification.InvalidPlan", message = "A version 1 notification plan is required." );
         }
+        variables.queueOptions = duplicate( arguments.memento.queueOptions ?: {} );
         variables.event = duplicate( arguments.memento.event );
         variables.deliveries = duplicate( arguments.memento.deliveries );
         if ( !isNull( variables.event.createdDate ) ) {
@@ -46,12 +54,19 @@ component accessors="true" {
         return duplicate( variables.deliveries );
     }
 
+    public struct function getQueueOptions() {
+        return duplicate( variables.queueOptions );
+    }
+
     public struct function getMemento() {
         var result = {
             "schemaVersion": 1,
             "event": duplicate( variables.event ),
             "deliveries": duplicate( variables.deliveries )
         };
+        if ( !variables.queueOptions.isEmpty() ) {
+            result.queueOptions = duplicate( variables.queueOptions );
+        }
         if ( !isNull( variables.admitAfter ) ) {
             result.admitAfter = variables.admitAfter;
         }

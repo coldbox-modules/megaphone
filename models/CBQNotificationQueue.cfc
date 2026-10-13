@@ -4,32 +4,28 @@ component singleton {
     property name="settings" inject="coldbox:moduleSettings:megaphone";
     property name="wirebox" inject="wirebox";
 
-    public void function enqueue( required NotificationDelivery delivery ) {
+    public void function enqueue( required NotificationDelivery delivery, string connection, string queue ) {
         if ( !listFind( "queued,retryable,processing", arguments.delivery.getState() ) ) {
             return;
-        }
-        var connection = variables.wirebox
-            .getInstance( "Config@cbq" )
-            .getConnection( variables.settings.durable.queueConnection );
-        if ( !isInstanceOf( connection.getProvider(), "cbq.models.Providers.DBProvider" ) ) {
-            throw(
-                type = "Megaphone.Configuration.InvalidQueueProvider",
-                message = "The bundled notification queue requires cbq's database provider so job insertion joins publication's transaction."
-            );
         }
         var availableDate = arguments.delivery.getAvailableDate();
         if ( arguments.delivery.getState() == "processing" ) {
             availableDate = arguments.delivery.getLeaseUntil();
         }
-        variables.wirebox
+        var job = variables.wirebox
             .getInstance( "NotificationDeliveryJob@megaphone" )
             .setProperties( { "deliveryId": arguments.delivery.getId() } )
             .setMaxAttempts( 1 )
-            .setTimeout( variables.settings.durable.queueTimeout )
-            .onConnection( variables.settings.durable.queueConnection )
-            .onQueue( variables.settings.durable.queueName )
-            .setDelay( max( 0, dateDiff( "s", now(), availableDate ) ) )
-            .dispatch();
+            .setDelay( max( 0, dateDiff( "s", now(), availableDate ) ) );
+        if ( !isNull( arguments.queue ) ) {
+            job.onQueue( arguments.queue );
+        }
+        if ( !isNull( arguments.connection ) ) {
+            job.onConnection( arguments.connection );
+        } else if ( len( variables.settings.durable.queueConnection ) ) {
+            job.onConnection( variables.settings.durable.queueConnection );
+        }
+        job.dispatch();
     }
 
 }

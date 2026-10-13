@@ -38,8 +38,16 @@ component singleton accessors="true" {
         required any notifiables,
         required any notification,
         struct properties = {},
-        struct options = {}
+        struct options = {},
+        string connection,
+        string queue
     ) {
+        var queueOptions = {};
+        for ( var name in [ "connection", "queue" ] ) {
+            if ( !isNull( arguments[ name ] ) ) {
+                queueOptions[ name ] = arguments[ name ];
+            }
+        }
         var runtime = newNotificationRuntime();
         var snapshotter = newSnapshotHasher();
         if ( isSimpleValue( arguments.notification ) ) {
@@ -78,11 +86,17 @@ component singleton accessors="true" {
         var plan = new megaphone.models.NotificationPlan(
             event,
             [],
-            arguments.options.admitAfter ?: javacast( "null", "" )
+            arguments.options.admitAfter ?: javacast( "null", "" ),
+            queueOptions
         );
         if ( !isNull( arguments.options.admitAfter ) && dateCompare( occurredAt, arguments.options.admitAfter ) < 0 ) {
             event.expired = true;
-            plan = new megaphone.models.NotificationPlan( event, [], arguments.options.admitAfter );
+            plan = new megaphone.models.NotificationPlan(
+                event,
+                [],
+                arguments.options.admitAfter,
+                queueOptions
+            );
             return plan;
         }
         var intents = [];
@@ -152,7 +166,8 @@ component singleton accessors="true" {
         return new megaphone.models.NotificationPlan(
             event,
             intents,
-            arguments.options.admitAfter ?: javacast( "null", "" )
+            arguments.options.admitAfter ?: javacast( "null", "" ),
+            queueOptions
         );
     }
 
@@ -160,13 +175,26 @@ component singleton accessors="true" {
         required any notifiables,
         required any notification,
         struct properties = {},
-        struct options = {}
+        struct options = {},
+        string connection,
+        string queue
     ) {
         return queuePlan( plan( argumentCollection = arguments ) );
     }
 
-    public NotificationPublication function queuePlan( required NotificationPlan plan, boolean alreadyAdmitted = false ) {
+    public NotificationPublication function queuePlan(
+        required NotificationPlan plan,
+        boolean alreadyAdmitted = false,
+        string connection,
+        string queue
+    ) {
         var captured = arguments.plan.getMemento();
+        var queueOptions = arguments.plan.getQueueOptions();
+        for ( var name in [ "connection", "queue" ] ) {
+            if ( !isNull( arguments[ name ] ) ) {
+                queueOptions[ name ] = arguments[ name ];
+            }
+        }
         if (
             !arguments.alreadyAdmitted && !isNull( captured.admitAfter ) && dateCompare(
                 captured.event.createdDate,
@@ -193,7 +221,9 @@ component singleton accessors="true" {
                     var delivery = service.createDelivery( event.getId(), intent );
                     deliveries.append( delivery );
                     if ( delivery.getCreated() && delivery.getState() == "queued" && !isNull( queueAdapter ) ) {
-                        queueAdapter.enqueue( delivery );
+                        var enqueueArguments = duplicate( queueOptions );
+                        enqueueArguments.delivery = delivery;
+                        queueAdapter.enqueue( argumentCollection = enqueueArguments );
                     }
                 }
                 return new megaphone.models.NotificationPublication( event, deliveries );

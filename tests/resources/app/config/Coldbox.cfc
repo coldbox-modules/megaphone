@@ -10,7 +10,7 @@ component {
      */
     function configure() {
         moduleSettings = {
-            "cbq": { "registerWorkers": false },
+            "cbq": { "configPath": "tests.resources.CBQTestConfig", "registerWorkers": false },
             "megaphone": {
                 "storage": {
                     "events": { "table": "megaphone_events", "datasource": "megaphone" },

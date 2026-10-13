@@ -2,7 +2,7 @@
 
 ## Added
 
-- Bundled cbq queue adapter and delivery job, enabled by default with configurable connection, queue, and timeout. Existing cbq configurations and custom queue adapters remain supported.
+- Bundled cbq queue adapter and delivery job, enabled by default with a connection setting and per-call `connection` and `queue` overrides. The adapter uses the Provider on a registered cbq connection, uses cbq's connection, queue, and worker defaults, and leaves Provider and worker registration to the application. Known safe retry decisions use cbq release/backoff; custom adapters remain supported.
 
 - Notification inbox APIs with recipient access checks, stable cursors, read snapshots, archive state, history imports, and retention.
 - Preferences by scope and channel, including device exclusions for each notification type.
@@ -26,7 +26,7 @@
 
 ## Upgrading
 
-Your existing notification and provider APIs still work. To use the new storage features, apply the module migrations in order to the same datasource as your application transaction. cbq is included with a default adapter; apply its queue migrations before using durable queueing. You'll need to configure preference scopes, access and eligibility callbacks, retention and replay settings, and worker recovery. For web push, add subscription encryption keys, push credentials, the optional SDK, and your browser and service-worker integration.
+Your existing notification and provider APIs still work. To use the new storage features, apply the module migrations in order to the same datasource as your application transaction. cbq is included with a default adapter; configure a registered connection and queue using your chosen Provider. Apply cbq's queue migrations when using its database Provider. You'll need to configure preference scopes, access and eligibility callbacks, retention and replay settings, and worker recovery. For web push, add subscription encryption keys, push credentials, the optional SDK, and your browser and service-worker integration.
 
 Installing the module doesn't import your existing history, preferences, or pending deliveries. Plan the handoff from your old delivery owner, keep stable import IDs, and make sure rollback won't resend work that's already been accepted. You can decide separately whether Megaphone handles authentication and account-access mail.
 
