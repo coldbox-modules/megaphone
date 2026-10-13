@@ -64,6 +64,8 @@ jobs:
           box install commandbox-migrations
           box migrate install --verbose
           box migrate up --verbose
+          box migrate install manager=cbq --verbose
+          box migrate up manager=cbq --verbose
 
       - name: Start server
         env:

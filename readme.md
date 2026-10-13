@@ -448,7 +448,8 @@ moduleSettings.megaphone = {
         "events": {}, "deliveries": {}, "preferences": {}, "subscriptions": {}
     },
     "durable": {
-        "queueAdapter": "NotificationQueue",
+        "queueAdapter": "CBQNotificationQueue@megaphone",
+        "queueConnection": "default", "queueName": "notifications", "queueTimeout": 60,
         "notifiableResolver": "NotifiableResolver",
         "eligibilityPolicy": "NotificationEligibility",
         "snapshotHasher": "NotificationSnapshotHasher@megaphone",
@@ -460,7 +461,13 @@ moduleSettings.megaphone = {
 
 Storage settings accept `table`, `queryOptions`, and `datasource`. Deliveries also accept `attemptsTable`, `eventsTable`, and `recoveriesTable`; subscriptions accept `exclusionsTable`. Adapt migrations when using custom table names, and keep related table settings consistent. New public APIs use `notifiableType`, `notifiableId`, and `channelName`; existing storage columns remain unchanged.
 
-A queue adapter implements `enqueue(delivery)` and stores only `delivery.getId()` in the same datasource transaction. It must not send there. Queue insertion failure rolls back publication. Without an adapter, schedule `NotificationDeliveryService.getDueDeliveries()` and `recoverExpired()`.
+Megaphone includes cbq and uses `CBQNotificationQueue@megaphone` by default. It inserts a `NotificationDeliveryJob@megaphone` containing only the delivery ID, on the `default` connection's `notifications` queue. Configure `durable.queueConnection`, `queueName`, and `queueTimeout` to change those defaults. The job gets one cbq attempt; Megaphone schedules another job only for a known retryable, deferred, or busy outcome. Ambiguous acceptance never triggers another send.
+
+If your application has no cbq configuration, the bundled configuration uses the delivery store's query options for a database connection. It defines one worker when a notifiable resolver is configured. Synchronous-only applications don't start durable workers or need queue tables. Existing cbq configurations are kept; add a worker for the notification queue in your application config.
+
+Apply cbq's bundled migrations through your migration ledger before queueing, on the same datasource as the Megaphone delivery records. Megaphone's migrations do not create cbq tables. A database job insertion failure rolls back publication.
+
+You can still provide a custom `durable.queueAdapter` implementing `enqueue(delivery)`. It should insert only the delivery ID in that same transaction and send from a worker. Explicitly set the adapter to an empty string if a scheduled worker polls `getDueDeliveries()` and `recoverExpired()` instead.
 
 A notifiable resolver implements `resolve(type, id)` and returns the matching current notifiable or null. An optional `deliveryPolicy` mapping implements `getDispatchOptions(id)` to provide lease, attempt, and retry options; explicit dispatch options take precedence.
 

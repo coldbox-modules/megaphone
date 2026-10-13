@@ -29,7 +29,8 @@
     "type":"modules",
     "dependencies":{
         "qb":"^9.4.0",
-        "str":"^3.0.1"
+        "str":"^3.0.1",
+        "cbq":"^6.0.2"
     },
     "devDependencies":{
         "coldbox":"^6",
@@ -43,7 +44,8 @@
         "qb":"modules/qb/",
         "str":"modules/str/",
         "cbmailservices":"tests/resources/app/modules/cbmailservices/",
-        "hyper":"tests/resources/app/modules/hyper/"
+        "hyper":"tests/resources/app/modules/hyper/",
+        "cbq":"modules/cbq/"
     },
     "ignore":[
         "**/.*",

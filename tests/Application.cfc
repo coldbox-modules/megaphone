@@ -14,7 +14,7 @@ component {
     this.mappings[ "/tests" ] = testsPath;
     rootPath = REReplaceNoCase( this.mappings[ "/tests" ], "tests(\\|/)", "" );
     this.mappings[ "/root" ] = rootPath;
-    this.javaSettings = { "loadPaths": [ rootPath & "resources/java/webpush" ], "loadColdFusionClassPath": true };
+    this.javaSettings = { "loadPaths": [ rootPath & "resources/java/webpush", rootPath & "modules/cbq/lib" ], "loadColdFusionClassPath": true };
     this.mappings[ "/testingModuleRoot" ] = listDeleteAt( rootPath, listLen( rootPath, '\/' ), "\/" );
     this.mappings[ "/megaphone" ] = rootPath;
     this.mappings[ "/qb" ] = rootPath & "/modules/qb";

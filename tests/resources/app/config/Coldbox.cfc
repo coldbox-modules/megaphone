@@ -10,6 +10,7 @@ component {
      */
     function configure() {
         moduleSettings = {
+            "cbq": { "registerWorkers": false },
             "megaphone": {
                 "storage": {
                     "events": { "table": "megaphone_events", "datasource": "megaphone" },
@@ -58,7 +59,7 @@ component {
             // Extension Points
             applicationHelper: "includes/helpers/ApplicationHelper.cfm",
             viewsHelper: "",
-            modulesExternalLocation: [],
+            modulesExternalLocation: [ "/testingModuleRoot" ],
             viewsExternalLocation: "",
             layoutsExternalLocation: "",
             handlersExternalLocation: "",

@@ -3,7 +3,7 @@ component {
     this.name = "megaphone";
     this.author = "Ortus Solutions";
     this.webUrl = "https://github.com/coldbox-modules/megaphone";
-    this.dependencies = [ "qb", "str" ];
+    this.dependencies = [ "qb", "str", "cbq" ];
     this.cfmapping = "megaphone";
 
     function configure() {
@@ -16,7 +16,10 @@ component {
                 "subscriptions": {}
             },
             "durable": {
-                "queueAdapter": "",
+                "queueAdapter": "CBQNotificationQueue@megaphone",
+                "queueConnection": "default",
+                "queueName": "notifications",
+                "queueTimeout": 60,
                 "notifiableResolver": "",
                 "eligibilityPolicy": "",
                 "snapshotHasher": "",
@@ -35,6 +38,10 @@ component {
     function onLoad() {
         param settings.storage = {};
         param settings.durable = {};
+        param settings.durable.queueAdapter = "CBQNotificationQueue@megaphone";
+        param settings.durable.queueConnection = "default";
+        param settings.durable.queueName = "notifications";
+        param settings.durable.queueTimeout = 60;
         param settings.durable.leaseSeconds = 60;
         param settings.durable.maxAttempts = 5;
         param settings.durable.retrySeconds = 30;
@@ -60,6 +67,15 @@ component {
                 .initArg( name = "properties", value = properties );
         }
         variables.wirebox.getInstance( "NotificationService@megaphone" ).registerChannels( settings.channels ?: {} );
+        configureDefaultQueue();
+    }
+
+    private void function configureDefaultQueue() {
+        var cbqSettings = variables.controller.getSetting( "moduleSettings" ).cbq;
+        // Existing application cbq configurations take precedence over the bundled one.
+        if ( cbqSettings.configPath == "config.cbq" && !variables.wirebox.containsInstance( cbqSettings.configPath ) ) {
+            cbqSettings.configPath = "#moduleMapping#.models.CBQConfig";
+        }
     }
 
 }
