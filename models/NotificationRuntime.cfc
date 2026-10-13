@@ -1,7 +1,7 @@
 /** Resolve optional application infrastructure lazily, after module activation. */
 component singleton {
 
-    property name="settings" inject="coldbox:moduleSettings:megaphone";
+    property name="settings" inject="box:moduleSettings:megaphone";
     property name="wirebox" inject="wirebox";
 
     /**
