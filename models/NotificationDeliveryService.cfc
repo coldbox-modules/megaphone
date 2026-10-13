@@ -6,6 +6,10 @@ component singleton {
     property name="runtime" inject="NotificationRuntime@megaphone";
     property name="wirebox" inject="wirebox";
 
+    /**
+     * Records an event and returns its public NotificationEvent object.
+     * @returns NotificationEvent
+     */
     public NotificationEvent function recordEvent(
         required string namespace,
         required string eventKey,
@@ -19,6 +23,10 @@ component singleton {
         return new megaphone.models.NotificationEvent( variables.eventStore.record( argumentCollection = arguments ) );
     }
 
+    /**
+     * Loads a public event object by ID, or returns null.
+     * @returns any
+     */
     public any function getEvent( required string id ) {
         var row = variables.eventStore.find( arguments.id );
         if ( isNull( row ) ) {
@@ -27,6 +35,10 @@ component singleton {
         return new megaphone.models.NotificationEvent( row );
     }
 
+    /**
+     * Loads a delivery object by ID, or returns null.
+     * @returns any
+     */
     public any function getDelivery( required string id, boolean lockRow = false ) {
         var row = variables.deliveryStore.find( argumentCollection = arguments );
         if ( isNull( row ) ) {
@@ -35,6 +47,10 @@ component singleton {
         return delivery( row );
     }
 
+    /**
+     * Persists a delivery intent and returns its NotificationDelivery object.
+     * @returns NotificationDelivery
+     */
     public NotificationDelivery function createDelivery( required string eventId, required struct intent ) {
         if ( !structKeyExists( arguments.intent, "enabled" ) || !isBoolean( arguments.intent.enabled ) ) {
             throw(
@@ -48,16 +64,28 @@ component singleton {
         return delivery( variables.deliveryStore.enqueue( argumentCollection = values ) );
     }
 
+    /**
+     * Imports delivery history while preserving stable IDs and acceptance evidence.
+     * @returns NotificationDelivery
+     */
     public NotificationDelivery function importDelivery( required struct intent, required struct history ) {
         return delivery(
             variables.deliveryStore.importDelivery( storageIntent( arguments.intent ), arguments.history )
         );
     }
 
+    /**
+     * Returns the delivery objects belonging to an event.
+     * @returns array
+     */
     public array function getDeliveriesForEvent( required string eventId ) {
         return variables.deliveryStore.forEvent( arguments.eventId ).map( ( row ) => delivery( row ) );
     }
 
+    /**
+     * Returns a bounded page of public delivery objects using application constraints.
+     * @returns NotificationDeliveryPage
+     */
     public NotificationDeliveryPage function getDeliveries( numeric maxRows = 50, numeric offset = 0, any constraints ) {
         var page = variables.deliveryStore.getPage( argumentCollection = arguments );
         return new megaphone.models.NotificationDeliveryPage(
@@ -66,6 +94,10 @@ component singleton {
         );
     }
 
+    /**
+     * Counts delivery states after applying the application's constraints.
+     * @returns array
+     */
     public array function getStateCounts( any constraints ) {
         return variables.deliveryStore
             .stateCounts( argumentCollection = arguments )
@@ -74,15 +106,27 @@ component singleton {
             } );
     }
 
+    /**
+     * Returns a bounded set of deliveries eligible for worker pickup.
+     * @returns array
+     */
     public array function getDueDeliveries( numeric limit = 100, date clock = now(), any constraints ) {
         return variables.deliveryStore.due( argumentCollection = arguments ).map( ( row ) => delivery( row ) );
     }
 
+    /**
+     * Returns public attempt objects for a delivery.
+     * @returns array
+     */
     public array function getAttempts( required string id ) {
         return variables.deliveryStore
             .attempts( arguments.id )
             .map( ( row ) => new megaphone.models.NotificationDeliveryAttempt( row ) );
     }
+    /**
+     * Returns a page of public recovery receipts for a delivery.
+     * @returns NotificationRecoveryPage
+     */
     public NotificationRecoveryPage function getRecoveryHistory(
         required string id,
         numeric maxRows = 20,
@@ -94,13 +138,25 @@ component singleton {
             page.hasMore
         );
     }
+    /**
+     * Returns the fingerprint used to reject stale operator recovery requests.
+     * @returns string
+     */
     public string function getRecoveryVersion( required NotificationDelivery delivery ) {
         return variables.deliveryStore.recoveryVersion( storageIntent( arguments.delivery.getMemento() ) );
     }
+    /**
+     * Checks whether this delivery has an outcome eligible for explicit recovery.
+     * @returns boolean
+     */
     public boolean function canRecover( required NotificationDelivery delivery ) {
         return variables.deliveryStore.canRecover( storageIntent( arguments.delivery.getMemento() ) );
     }
 
+    /**
+     * Claims and prepares a delivery, rechecks eligibility, and records its transport outcome.
+     * @returns DeliveryResult
+     */
     public DeliveryResult function dispatch( required string id, struct options = {} ) {
         var dispatchPolicy = variables.runtime.resolve( "deliveryPolicy" );
         var configuredOptions = isNull( dispatchPolicy ) ? {} : dispatchPolicy.getDispatchOptions( arguments.id );
@@ -253,6 +309,10 @@ component singleton {
         );
     }
 
+    /**
+     * Requests bounded explicit recovery using a stable request key and current eligibility evidence.
+     * @returns DeliveryRecoveryResult
+     */
     public DeliveryRecoveryResult function requestRecovery(
         required string id,
         required string requestKey,
@@ -298,6 +358,10 @@ component singleton {
         }
     }
 
+    /**
+     * Reconciles a stored delivery against explicit application acceptance evidence.
+     * @returns boolean
+     */
     public boolean function reconcileAccepted( required string id, required function acceptance, date clock = now() ) {
         transaction {
             var work = getDelivery( arguments.id, true );
@@ -312,12 +376,24 @@ component singleton {
         }
     }
 
+    /**
+     * Recovers expired leases without automatically retrying uncertain acceptance.
+     * @returns numeric
+     */
     public numeric function recoverExpired( numeric limit = 100, date clock = now() ) {
         return variables.deliveryStore.recoverExpired( argumentCollection = arguments );
     }
+    /**
+     * Deletes a bounded batch of eligible old transport attempts.
+     * @returns numeric
+     */
     public numeric function pruneAttempts( required date beforeDate, numeric limit = 200 ) {
         return variables.deliveryStore.pruneAttempts( argumentCollection = arguments );
     }
+    /**
+     * Prunes resolved events only after the application authorizes removal of external references.
+     * @returns numeric
+     */
     public numeric function pruneResolvedEvents(
         required date eventsBefore,
         required date deliveriesBefore,
@@ -336,6 +412,10 @@ component singleton {
         return variables.deliveryStore.pruneResolvedEvents( argumentCollection = values );
     }
 
+    /**
+     * Resolves the current application policy and returns its preparation decision.
+     * @returns DeliveryPreparation
+     */
     private DeliveryPreparation function checkEligibility(
         required NotificationDelivery work,
         required any notifiable,
@@ -360,6 +440,10 @@ component singleton {
         return ready;
     }
 
+    /**
+     * Stores a suppression or deferral decision without starting transport.
+     * @returns DeliveryResult
+     */
     private DeliveryResult function settlePreparation(
         required NotificationDelivery work,
         required string token,
@@ -378,6 +462,10 @@ component singleton {
         );
     }
 
+    /**
+     * Records a terminal or deferred outcome using the current claim token.
+     * @returns DeliveryResult
+     */
     private DeliveryResult function settle(
         required NotificationDelivery work,
         required string token,
@@ -395,10 +483,18 @@ component singleton {
         return completed ? arguments.outcome : result( "superseded" );
     }
 
+    /**
+     * Creates a typed delivery result from a status and reason.
+     * @returns DeliveryResult
+     */
     private DeliveryResult function result( required string status, string reason = "" ) {
         return new megaphone.models.DeliveryResult( { "status": arguments.status, "reason": arguments.reason } );
     }
 
+    /**
+     * Converts an internal delivery row to the public delivery object.
+     * @returns NotificationDelivery
+     */
     private NotificationDelivery function delivery( required struct row ) {
         var values = duplicate( arguments.row );
         values.notifiableType = values.recipientType;
@@ -407,6 +503,10 @@ component singleton {
         return new megaphone.models.NotificationDelivery( values );
     }
 
+    /**
+     * Maps public Notifiable/channel names onto the existing storage column names.
+     * @returns struct
+     */
     private struct function storageIntent( required struct intent ) {
         var values = duplicate( arguments.intent );
         if ( structKeyExists( values, "notifiableType" ) ) {

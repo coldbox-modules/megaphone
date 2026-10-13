@@ -26,6 +26,9 @@ component extends="testbox.system.BaseSpec" {
             .initArg( name = "name", value = "database" )
             .initArg( name = "properties", value = variables.databaseProperties );
         binder.map( "DatabaseNotificationCursor@megaphone" ).to( "megaphone.models.DatabaseNotificationCursor" );
+        binder
+            .map( "DatabaseNotificationKeysetCursor@megaphone" )
+            .to( "megaphone.models.DatabaseNotificationKeysetCursor" );
         binder.map( "DatabaseNotification@megaphone" ).to( "megaphone.models.DatabaseNotification" );
         binder
             .map( "DatabaseNotificationService@megaphone" )
@@ -58,6 +61,49 @@ component extends="testbox.system.BaseSpec" {
                         transactionRollback();
                     }
                 }
+            } );
+
+            it( "uses an overridden WireBox keyset cursor through subsequent pages", () => {
+                var binder = variables.injector.getBinder();
+                binder
+                    .map( "DatabaseNotificationKeysetCursor@megaphone" )
+                    .to( "tests.resources.MappedDatabaseNotificationKeysetCursor" )
+                    .initArg( name = "marker", value = "from-wirebox" );
+                try {
+                    var oldest = store(
+                        variables.owner,
+                        "old",
+                        "one",
+                        dateAdd( "s", -1, now() )
+                    );
+                    store( variables.owner, "new", "one", now() );
+                    var page = variables.inbox.getNotificationsAfter( notifiable = variables.owner, maxRows = 1 );
+                    expect( page.suppliedByTestMapping() ).toBeTrue();
+                    expect( page.hasNext() ).toBeTrue();
+                    page.next();
+                    expect( page.getResults()[ 1 ].getId() ).toBe( oldest.getId() );
+                    expect( page.hasNext() ).toBeFalse();
+                } finally {
+                    binder
+                        .map( "DatabaseNotificationKeysetCursor@megaphone" )
+                        .to( "megaphone.models.DatabaseNotificationKeysetCursor" );
+                }
+            } );
+
+            it( "rejects a correctly shaped cursor whose timestamp JDBC cannot parse", () => {
+                var boundary = {
+                    "id": createUUID(),
+                    "timestamp": "2026-13-01 12:00:00.000000001",
+                    "recipientId": variables.owner.getNotifiableId(),
+                    "recipientType": variables.owner.getNotifiableType()
+                };
+                var encoded = toBase64( serializeJSON( boundary ), "UTF-8" );
+                encoded = replace( encoded, "+", "-", "all" );
+                encoded = replace( encoded, "/", "_", "all" );
+                encoded = replace( encoded, "=", "", "all" );
+                expect( () => variables.inbox.getNotificationsAfter( notifiable = variables.owner, afterCursor = encoded ) ).toThrow(
+                    type = "Megaphone.Database.InvalidCursor"
+                );
             } );
 
             it( "applies visibility before pagination and counts, including OR constraints", () => {

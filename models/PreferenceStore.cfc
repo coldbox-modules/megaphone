@@ -5,11 +5,18 @@ component accessors="true" {
     property name="uuidGenerator" inject="java:java.util.UUID";
     property name="resolver" inject="PreferenceResolver@megaphone";
 
+    /**
+     * Stores the preference persistence configuration.
+     * @returns PreferenceStore
+     */
     public PreferenceStore function init( struct properties = {} ) {
         variables.properties = arguments.properties;
         return this;
     }
 
+    /**
+     * Stores one owned scope/channel choice; inherit removes the override.
+     */
     public void function saveChoice(
         required any notifiable,
         required string notificationType,
@@ -108,6 +115,10 @@ component accessors="true" {
         } );
     }
 
+    /**
+     * Returns explicit stored scopes and the effective channel decisions for ordered application scopes.
+     * @returns struct
+     */
     public struct function configuration(
         required any notifiable,
         required string notificationType,
@@ -138,7 +149,7 @@ component accessors="true" {
         var removed = 0;
         for ( var row in rows ) {
             transaction {
-                var query = newPreferenceQuery().where( arguments.constraints );
+                var qb = newPreferenceQuery().where( arguments.constraints );
                 for (
                     var key in [
                         "recipientType",
@@ -148,24 +159,26 @@ component accessors="true" {
                         "channel"
                     ]
                 ) {
-                    query.where( key, row[ key ] );
+                    qb.where( key, row[ key ] );
                 }
                 if (
-                    query
-                        .clone()
+                    qb.clone()
                         .lockForUpdate()
                         .get()
                         .isEmpty()
                 ) {
                     continue;
                 }
-                query.delete();
+                qb.delete();
                 removed++;
             }
         }
         return removed;
     }
 
+    /**
+     * Deletes records belonging to the supplied Notifiable.
+     */
     public void function deleteRecipient( required any notifiable ) {
         var identity = recipient( arguments.notifiable );
         newPreferenceQuery()
@@ -174,6 +187,10 @@ component accessors="true" {
             .delete();
     }
 
+    /**
+     * Reads and validates the Notifiable type and ID used for storage ownership.
+     * @returns struct
+     */
     private struct function recipient( required any notifiable ) {
         var type = arguments.notifiable.getNotifiableType();
         var id = arguments.notifiable.getNotifiableId();
@@ -181,6 +198,9 @@ component accessors="true" {
         validateKey( id, 100 );
         return { "recipientType": type, "recipientId": id };
     }
+    /**
+     * Checks that a preference key is nonempty and within its column limit.
+     */
     private void function validateKey( required string value, required numeric maxLength ) {
         if ( !len( trim( arguments.value ) ) || len( arguments.value ) > arguments.maxLength ) {
             throw(
@@ -189,12 +209,24 @@ component accessors="true" {
             );
         }
     }
+    /**
+     * Builds a query for the configured preference table.
+     * @returns any
+     */
     private any function newPreferenceQuery() {
         return newQueryBuilder().from( getTableName() ).mergeDefaultOptions( getQueryOptions() );
     }
+    /**
+     * Returns the configured table name, or this store's default.
+     * @returns string
+     */
     public string function getTableName() {
         return variables.properties.table ?: "megaphone_preferences";
     }
+    /**
+     * Returns query options with an explicitly configured datasource taking precedence.
+     * @returns struct
+     */
     public struct function getQueryOptions() {
         var options = duplicate( variables.properties.queryOptions ?: {} );
         if ( variables.properties.keyExists( "datasource" ) ) {
@@ -203,6 +235,10 @@ component accessors="true" {
         return options;
     }
 
+    /**
+     * Supplies a fresh QueryBuilder through WireBox.
+     * @returns QueryBuilder
+     */
     private QueryBuilder function newQueryBuilder() provider="QueryBuilder@qb" {
     }
 

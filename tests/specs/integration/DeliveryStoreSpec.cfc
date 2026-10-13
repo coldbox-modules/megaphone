@@ -272,8 +272,8 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 var first = enqueue( recipient = "wanted" );
                 var second = enqueue( recipient = "wanted", channel = "database", initialState = "suppressed" );
                 enqueue( recipient = "foreign" );
-                var filter = function( query ) {
-                    return query.where( "delivery.recipientId", "wanted" );
+                var filter = function( qb ) {
+                    return qb.where( "delivery.recipientId", "wanted" );
                 };
                 var one = variables.deliveries.getPage( 1, 0, filter );
                 var two = variables.deliveries.getPage( 1, 1, filter );
@@ -287,9 +287,9 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 var suppressed = variables.deliveries.getPage(
                     50,
                     0,
-                    ( query ) => {
-                        filter( query );
-                        query.where( "delivery.state", "suppressed" );
+                    ( qb ) => {
+                        filter( qb );
+                        qb.where( "delivery.state", "suppressed" );
                     }
                 );
                 expect( suppressed.results.len() ).toBe( 1 );

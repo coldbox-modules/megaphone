@@ -6,6 +6,10 @@ component accessors="true" {
     property name="retryDate" setter="false";
     property name="retireSubscription" setter="false";
 
+    /**
+     * Copies supplied transport fields, defaulting to ambiguous acceptance.
+     * @returns DeliveryResult
+     */
     public DeliveryResult function init( struct data = {} ) {
         variables.status = "ambiguous";
         variables.reason = "";
@@ -24,10 +28,18 @@ component accessors="true" {
         return this;
     }
 
+    /**
+     * Returns the scheduled retry date, or null when none was supplied.
+     * @returns any
+     */
     public any function getRetryDate() {
         return variables.retryDate ?: javacast( "null", "" );
     }
 
+    /**
+     * Returns this object's public data as a serializable memento.
+     * @returns struct
+     */
     public struct function getMemento() {
         var result = {};
         for ( var key in listToArray( "status,reason,providerReference,retryDate,retireSubscription" ) ) {

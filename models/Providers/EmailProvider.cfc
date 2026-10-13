@@ -5,6 +5,10 @@ component extends="BaseProvider" accessors="true" {
     property name="wirebox" inject="wirebox";
     property name="mailService";
 
+    /**
+     * Prepares one durable delivery without sending it.
+     * @returns DeliveryPreparation
+     */
     public DeliveryPreparation function prepareDelivery(
         required any notifiable,
         required any notification,
@@ -13,15 +17,27 @@ component extends="BaseProvider" accessors="true" {
         return durableAdapter().prepareDelivery( arguments.notifiable, arguments.notification, arguments.delivery );
     }
 
+    /**
+     * Sends one prepared delivery and returns an explicit transport outcome.
+     * @returns DeliveryResult
+     */
     public DeliveryResult function sendDelivery( required any prepared, required any delivery ) {
         return durableAdapter().sendDelivery( arguments.prepared, arguments.delivery );
     }
 
+    /**
+     * Checks whether this Provider has the configured durable delivery support.
+     * @returns boolean
+     */
     public boolean function supportsDurableDelivery() {
         var properties = getProperties();
         return structKeyExists( properties, "durableAdapter" ) && len( properties.durableAdapter );
     }
 
+    /**
+     * Resolves the receipt-aware email adapter or throws a configuration exception.
+     * @returns any
+     */
     private any function durableAdapter() {
         if ( !supportsDurableDelivery() ) {
             throw(
@@ -32,6 +48,9 @@ component extends="BaseProvider" accessors="true" {
         return variables.wirebox.getInstance( getProperties().durableAdapter );
     }
 
+    /**
+     * Activates cbmailservices and resolves synchronous mail defaults after injection.
+     */
     function onDIComplete() {
         try {
             variables.moduleService.activateModule( "cbmailservices" );
@@ -73,10 +92,18 @@ component extends="BaseProvider" accessors="true" {
         }
     }
 
+    /**
+     * Returns the Provider type used to validate channel configuration.
+     * @returns string
+     */
     public string function getProviderName() {
         return "EmailProvider";
     }
 
+    /**
+     * Sends a populated Notification synchronously through its enabled channels.
+     * @returns BaseNotification
+     */
     public BaseNotification function notify( required any notifiable, required BaseNotification notification ) {
         var mail = arguments.notification.routeForType(
             type = "email",

@@ -12,6 +12,10 @@ component accessors="true" {
     property name="created" setter="false";
     property name="expired" setter="false";
 
+    /**
+     * Copies persisted event fields into the public event object.
+     * @returns NotificationEvent
+     */
     public NotificationEvent function init( struct data = {} ) {
         variables.id = "";
         variables.created = false;
@@ -30,6 +34,10 @@ component accessors="true" {
         return this;
     }
 
+    /**
+     * Returns this object's public data as a serializable memento.
+     * @returns struct
+     */
     public struct function getMemento() {
         var result = {};
         for (

@@ -3,11 +3,19 @@ component accessors="true" {
 
     property name="properties" type="struct" setter="false";
     property name="uuidGenerator" inject="java:java.util.UUID";
+    /**
+     * Stores the subscription persistence configuration.
+     * @returns SubscriptionStore
+     */
     public SubscriptionStore function init( struct properties = {} ) {
         variables.properties = arguments.properties;
         return this;
     }
 
+    /**
+     * Registers or renews an owned subscription while preserving its stable device identity.
+     * @returns struct
+     */
     public struct function register(
         required any notifiable,
         required string endpointHash,
@@ -46,7 +54,7 @@ component accessors="true" {
                 } );
                 local.existingId = arguments.existingId;
                 var rows = newSubscriptionQuery()
-                    .where( ( query ) => query.where( "endpointKey", endpointHash ).orWhere( "id", existingId ) )
+                    .where( ( qb ) => qb.where( "endpointKey", endpointHash ).orWhere( "id", existingId ) )
                     .orderBy( "id" )
                     .lockForUpdate()
                     .get();
@@ -119,15 +127,18 @@ component accessors="true" {
         }
     }
 
+    /**
+     * Loads public registration metadata for the Notifiable, optionally limited to active devices.
+     * @returns array
+     */
     public array function registrations( required any notifiable, boolean activeOnly = true, date clock = now() ) {
-        var query = ownedQuery( recipient( arguments.notifiable ) );
+        var qb = ownedQuery( recipient( arguments.notifiable ) );
         if ( arguments.activeOnly ) {
             local.clock = arguments.clock;
-            query
-                .where( "active", booleanBinding( true ) )
-                .where( ( query ) => query.whereNull( "expiresDate" ).orWhere( "expiresDate", ">", clock ) );
+            qb.where( "active", booleanBinding( true ) )
+                .where( ( qb ) => qb.whereNull( "expiresDate" ).orWhere( "expiresDate", ">", clock ) );
         }
-        return query
+        return qb
             .select( publicColumns() )
             .orderBy( "createdDate" )
             .orderBy( "id" )
@@ -140,7 +151,7 @@ component accessors="true" {
         var rows = ownedQuery( recipient( arguments.notifiable ) )
             .where( "id", arguments.id )
             .where( "active", booleanBinding( true ) )
-            .where( ( query ) => query.whereNull( "expiresDate" ).orWhere( "expiresDate", ">", clock ) )
+            .where( ( qb ) => qb.whereNull( "expiresDate" ).orWhere( "expiresDate", ">", clock ) )
             .get();
         if ( rows.isEmpty() ) {
             return;
@@ -148,26 +159,33 @@ component accessors="true" {
         return rows[ 1 ];
     }
 
+    /**
+     * Renames an owned registration after validating its label.
+     * @returns boolean
+     */
     public boolean function rename( required any notifiable, required string id, required string label ) {
         if ( !len( trim( arguments.label ) ) || len( arguments.label ) > 100 ) {
             throw( type = "Megaphone.Push.InvalidRegistration", message = "A valid registration label is required." );
         }
         transaction {
-            var query = ownedQuery( recipient( arguments.notifiable ) ).where( "id", arguments.id );
+            var qb = ownedQuery( recipient( arguments.notifiable ) ).where( "id", arguments.id );
             if (
-                query
-                    .clone()
+                qb.clone()
                     .lockForUpdate()
                     .get()
                     .isEmpty()
             ) {
                 return false;
             }
-            query.update( { "label": arguments.label } );
+            qb.update( { "label": arguments.label } );
             return true;
         }
     }
 
+    /**
+     * Retires an owned registration and removes its sealed credentials.
+     * @returns boolean
+     */
     public boolean function disconnect( required any notifiable, required string id ) {
         transaction {
             var rows = ownedQuery( recipient( arguments.notifiable ) )
@@ -185,6 +203,9 @@ component accessors="true" {
         }
     }
 
+    /**
+     * Sets or clears one owned device exclusion for a notification type.
+     */
     public void function setExcluded(
         required any notifiable,
         required string notificationType,
@@ -227,6 +248,10 @@ component accessors="true" {
         }
     }
 
+    /**
+     * Lists device exclusions owned by this Notifiable for a notification type.
+     * @returns array
+     */
     public array function excludedIds( required any notifiable, required string notificationType ) {
         var owner = recipient( arguments.notifiable );
         return newExclusionQuery()
@@ -243,14 +268,14 @@ component accessors="true" {
         if ( arguments.limit < 1 || arguments.limit > 1000 || fix( arguments.limit ) != arguments.limit ) {
             throw( type = "Megaphone.Push.InvalidBatch", message = "Retirement requires a batch between 1 and 1000." );
         }
-        var query = newSubscriptionQuery()
+        var qb = newSubscriptionQuery()
             .where( "active", booleanBinding( true ) )
             .where( "expiresDate", "<=", arguments.clock );
         if ( !isNull( arguments.notifiable ) ) {
             var owner = recipient( arguments.notifiable );
-            query.where( "recipientType", owner.recipientType ).where( "recipientId", owner.recipientId );
+            qb.where( "recipientType", owner.recipientType ).where( "recipientId", owner.recipientId );
         }
-        var rows = query
+        var rows = qb
             .clone()
             .orderBy( "expiresDate" )
             .orderBy( "id" )
@@ -260,8 +285,7 @@ component accessors="true" {
         for ( var row in rows ) {
             transaction {
                 if (
-                    query
-                        .clone()
+                    qb.clone()
                         .where( "id", row.id )
                         .lockForUpdate()
                         .get()
@@ -276,6 +300,10 @@ component accessors="true" {
         return retired;
     }
 
+    /**
+     * Deletes a bounded batch of old inactive registrations and their exclusions.
+     * @returns numeric
+     */
     public numeric function pruneInactive( required date beforeDate, numeric limit = 100 ) {
         if ( arguments.limit < 1 || fix( arguments.limit ) != arguments.limit ) {
             throw( type = "Megaphone.Push.InvalidBatch", message = "Batch size must be a positive integer." );
@@ -307,6 +335,9 @@ component accessors="true" {
         return removed;
     }
 
+    /**
+     * Deletes records belonging to the supplied Notifiable.
+     */
     public void function deleteRecipient( required any notifiable ) {
         var owner = recipient( arguments.notifiable );
         transaction {
@@ -318,6 +349,9 @@ component accessors="true" {
         }
     }
 
+    /**
+     * Clears sealed credentials and marks a registration inactive.
+     */
     private void function retire( required string id ) {
         newSubscriptionQuery()
             .where( "id", arguments.id )
@@ -328,6 +362,10 @@ component accessors="true" {
                 "retiredDate": timestamp( now() )
             } );
     }
+    /**
+     * Lists registration columns safe to expose to application settings screens.
+     * @returns array
+     */
     private array function publicColumns() {
         return [
             "id",
@@ -339,6 +377,10 @@ component accessors="true" {
             "retiredDate"
         ];
     }
+    /**
+     * Reads and validates the Notifiable type and ID used for storage ownership.
+     * @returns struct
+     */
     private struct function recipient( required any notifiable ) {
         var owner = {
             "recipientType": arguments.notifiable.getNotifiableType(),
@@ -353,31 +395,63 @@ component accessors="true" {
         }
         return owner;
     }
+    /**
+     * Builds a query constrained to the owning Notifiable.
+     * @returns any
+     */
     private any function ownedQuery( required struct owner ) {
         return newSubscriptionQuery()
             .where( "recipientType", arguments.owner.recipientType )
             .where( "recipientId", arguments.owner.recipientId );
     }
+    /**
+     * Builds an explicit boolean binding for the subscription store.
+     * @returns struct
+     */
     private struct function booleanBinding( required boolean value ) {
         return { "value": arguments.value, "cfsqltype": "bit" };
     }
+    /**
+     * Builds a nullable timestamp binding for storage writes.
+     * @returns struct
+     */
     private struct function timestamp( any value ) {
         return { "value": arguments.value ?: "", "null": isNull( arguments.value ), "cfsqltype": "timestamp" };
     }
+    /**
+     * Generates an identifier using the injected UUID generator.
+     * @returns string
+     */
     private string function uuid() {
         return variables.uuidGenerator.randomUUID().toString();
     }
+    /**
+     * Builds a query for the configured subscription table.
+     * @returns any
+     */
     private any function newSubscriptionQuery() {
         return newQueryBuilder().from( getTableName() ).mergeDefaultOptions( getQueryOptions() );
     }
+    /**
+     * Builds a query for the configured device-exclusion table.
+     * @returns any
+     */
     private any function newExclusionQuery() {
         return newQueryBuilder()
             .from( variables.properties.exclusionsTable ?: "megaphone_device_exclusions" )
             .mergeDefaultOptions( getQueryOptions() );
     }
+    /**
+     * Returns the configured table name, or this store's default.
+     * @returns string
+     */
     public string function getTableName() {
         return variables.properties.table ?: "megaphone_subscriptions";
     }
+    /**
+     * Returns query options with an explicitly configured datasource taking precedence.
+     * @returns struct
+     */
     public struct function getQueryOptions() {
         var options = duplicate( variables.properties.queryOptions ?: {} );
         if ( variables.properties.keyExists( "datasource" ) ) {
@@ -386,6 +460,10 @@ component accessors="true" {
         return options;
     }
 
+    /**
+     * Supplies a fresh QueryBuilder through WireBox.
+     * @returns QueryBuilder
+     */
     private QueryBuilder function newQueryBuilder() provider="QueryBuilder@qb" {
     }
 

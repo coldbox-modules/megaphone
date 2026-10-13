@@ -4,11 +4,19 @@ component accessors="true" {
     property name="properties" type="struct" setter="false";
     property name="uuidGenerator" inject="java:java.util.UUID";
 
+    /**
+     * Stores the event persistence configuration.
+     * @returns EventStore
+     */
     public EventStore function init( struct properties = {} ) {
         variables.properties = arguments.properties;
         return this;
     }
 
+    /**
+     * Persists a stable event identity without replacing an existing replay.
+     * @returns struct
+     */
     public struct function record(
         required string namespace,
         required string eventKey,
@@ -65,6 +73,10 @@ component accessors="true" {
         return stored;
     }
 
+    /**
+     * Loads a stored record by ID, optionally locking it in the caller's transaction.
+     * @returns any
+     */
     public any function find( required string id ) {
         var rows = newEventQuery().where( "id", arguments.id ).get();
         if ( rows.isEmpty() ) {
@@ -75,13 +87,25 @@ component accessors="true" {
         return stored;
     }
 
+    /**
+     * Builds a query for the configured event table.
+     * @returns any
+     */
     private any function newEventQuery() {
         return newQueryBuilder().from( getTableName() ).mergeDefaultOptions( getQueryOptions() );
     }
 
+    /**
+     * Returns the configured table name, or this store's default.
+     * @returns string
+     */
     public string function getTableName() {
         return variables.properties.table ?: "megaphone_events";
     }
+    /**
+     * Returns query options with an explicitly configured datasource taking precedence.
+     * @returns struct
+     */
     public struct function getQueryOptions() {
         var options = duplicate( variables.properties.queryOptions ?: {} );
         if ( variables.properties.keyExists( "datasource" ) ) {
@@ -90,6 +114,10 @@ component accessors="true" {
         return options;
     }
 
+    /**
+     * Supplies a fresh QueryBuilder through WireBox.
+     * @returns QueryBuilder
+     */
     private QueryBuilder function newQueryBuilder() provider="QueryBuilder@qb" {
     }
 

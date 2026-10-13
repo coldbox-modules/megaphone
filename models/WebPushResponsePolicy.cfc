@@ -1,6 +1,10 @@
 /** Classifies a completed push response without retaining provider bodies or subscription URLs. */
 component {
 
+    /**
+     * Classifies the HTTP outcome without treating ambiguous acceptance as retryable.
+     * @returns struct
+     */
     public struct function classify( required numeric statusCode, string retryAfter = "", date clock = now() ) {
         if (
             arguments.statusCode != fix( arguments.statusCode ) || arguments.statusCode < 100 || arguments.statusCode > 599
@@ -34,6 +38,10 @@ component {
         return result;
     }
 
+    /**
+     * Resolves a bounded retry date from Retry-After or the configured retry delay.
+     * @returns date
+     */
     private date function retryDate( required string value, required date clock ) {
         var seconds = 60;
         var header = trim( arguments.value );

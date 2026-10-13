@@ -5,11 +5,19 @@ component singleton accessors="true" {
 
     property name="channels";
 
+    /**
+     * Initializes the registry of configured notification channels.
+     * @returns NotificationService
+     */
     public NotificationService function init() {
         variables.channels = {};
         return this;
     }
 
+    /**
+     * Sends a populated Notification synchronously through its enabled channels.
+     * @returns BaseNotification
+     */
     public BaseNotification function notify(
         required any notifiables,
         required any notification,
@@ -34,6 +42,10 @@ component singleton accessors="true" {
         return arguments.notification;
     }
 
+    /**
+     * Captures recipients, channel choices, device destinations, properties, and hashes without writing or sending.
+     * @returns NotificationPlan
+     */
     public NotificationPlan function plan(
         required any notifiables,
         required any notification,
@@ -171,6 +183,10 @@ component singleton accessors="true" {
         );
     }
 
+    /**
+     * Plans and transactionally persists a Notification for durable delivery.
+     * @returns NotificationPublication
+     */
     public NotificationPublication function queue(
         required any notifiables,
         required any notification,
@@ -182,6 +198,10 @@ component singleton accessors="true" {
         return queuePlan( plan( argumentCollection = arguments ) );
     }
 
+    /**
+     * Persists a saved plan without expanding its audience or re-enabling suppressed work.
+     * @returns NotificationPublication
+     */
     public NotificationPublication function queuePlan(
         required NotificationPlan plan,
         boolean alreadyAdmitted = false,
@@ -235,6 +255,10 @@ component singleton accessors="true" {
     }
 
 
+    /**
+     * Registers Provider instances under the configured channel names.
+     * @returns NotificationService
+     */
     public NotificationService function registerChannels( required struct channels, boolean overwrite = false ) {
         if ( arguments.overwrite ) {
             variables.channels = {};
@@ -274,14 +298,30 @@ component singleton accessors="true" {
         );
     }
 
+    /**
+     * Normalizes one Notifiable or an array into an array.
+     * @returns array
+     */
     private array function arrayWrap( required any items ) {
         return isArray( arguments.items ) ? arguments.items : [ arguments.items ];
     }
 
+    /**
+     * Supplies the lazy notification runtime through WireBox.
+     * @returns any
+     */
     private any function newNotificationRuntime() provider="NotificationRuntime@megaphone" {
     }
+    /**
+     * Supplies the default deterministic snapshot hasher through WireBox.
+     * @returns any
+     */
     private any function newSnapshotHasher() provider="NotificationSnapshotHasher@megaphone" {
     }
+    /**
+     * Supplies the delivery operations service through WireBox.
+     * @returns any
+     */
     private any function newDeliveryService() provider="NotificationDeliveryService@megaphone" {
     }
 

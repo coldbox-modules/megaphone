@@ -1,6 +1,10 @@
 /** Loads the pinned Web Push JAR dependency only when push is used. */
 component {
 
+    /**
+     * Verifies that the installed SDK JAR matches its pinned checksum before loading classes.
+     * @returns WebPushClassFactory
+     */
     public WebPushClassFactory function init() {
         variables.jarPath = expandPath( "/megaphone/resources/java/webpush/zerodep-web-push-java-2.1.5.jar" );
         if (
@@ -16,6 +20,10 @@ component {
         return this;
     }
 
+    /**
+     * Loads a class from the checksum-verified Web Push SDK JAR.
+     * @returns any
+     */
     public any function create( required string className ) {
         return createObject( "java", arguments.className, variables.jarPath );
     }

@@ -1,14 +1,26 @@
 /** Deterministic JSON snapshots. Object keys are sorted; array order is significant. */
 component singleton {
 
+    /**
+     * Hashes canonical JSON with SHA-256, preserving array order and sorting object keys.
+     * @returns string
+     */
     public string function digest( required any value, struct context = {} ) {
         return lCase( hash( canonical( arguments.value ), "SHA-256" ) );
     }
 
+    /**
+     * Copies JSON-safe data through canonical serialization, rejecting objects and callbacks.
+     * @returns any
+     */
     public any function snapshot( required any value ) {
         return deserializeJSON( canonical( arguments.value ) );
     }
 
+    /**
+     * Serializes JSON-safe values with sorted object keys and significant array order.
+     * @returns string
+     */
     private string function canonical( required any value ) {
         if ( isNull( arguments.value ) ) {
             return "null";

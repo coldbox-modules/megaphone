@@ -1,6 +1,9 @@
 /** Optional standards-based request preparation. The SDK class factory is supplied by the consumer. */
 component {
 
+    /**
+     * Validates contact, trusted-host, and timeout settings and captures transport collaborators.
+     */
     function init(
         required any classFactory,
         required any vapidKeyPair,
@@ -135,6 +138,9 @@ component {
         }
     }
 
+    /**
+     * Requires an HTTPS push-service endpoint on an explicitly trusted host.
+     */
     public void function validateEndpoint( required string endpoint ) {
         try {
             var uri = createObject( "java", "java.net.URI" ).init( arguments.endpoint );
@@ -168,6 +174,9 @@ component {
         }
     }
 
+    /**
+     * Validates the subscription key encoding and expected byte length.
+     */
     private void function validateKey( required string value, required numeric bytes ) {
         if ( !reFind( "^[A-Za-z0-9_-]+={0,2}$", arguments.value ) ) {
             throw( message = "Invalid key encoding." );
@@ -182,6 +191,10 @@ component {
         }
     }
 
+    /**
+     * Creates the JDK duration used for request timeouts.
+     * @returns any
+     */
     private any function duration() {
         return createObject( "java", "java.time.Duration" ).ofSeconds( javacast( "long", variables.timeoutSeconds ) );
     }

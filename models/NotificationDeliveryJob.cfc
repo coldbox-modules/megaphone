@@ -3,6 +3,10 @@ component extends="cbq.models.Jobs.AbstractJob" {
 
     property name="deliveries" inject="NotificationDeliveryService@megaphone";
 
+    /**
+     * Dispatches the stored delivery ID and releases only outcomes safe to retry through cbq.
+     * @returns string
+     */
     public string function handle() {
         // A reused synchronous job must clear its prior release decision.
         setIsReleased( false );

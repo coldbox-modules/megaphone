@@ -13,6 +13,10 @@ component accessors="true" {
     property name="priorProviderReference" setter="false";
     property name="additionalAttempts" setter="false";
     property name="createdDate" setter="false";
+    /**
+     * Copies persisted recovery receipt fields into the public receipt object.
+     * @returns NotificationRecoveryReceipt
+     */
     public NotificationRecoveryReceipt function init( required struct data ) {
         for (
             var key in listToArray( "id,deliveryId,requestKey,intentHash,actorId,actorLabel,priorState,priorAttemptCount,priorTransportCount,priorReason,priorProviderReference,additionalAttempts,createdDate" )
@@ -23,6 +27,10 @@ component accessors="true" {
         }
         return this;
     }
+    /**
+     * Returns this object's public data as a serializable memento.
+     * @returns struct
+     */
     public struct function getMemento() {
         var result = {};
         for (

@@ -1,6 +1,9 @@
 /** AES-256-GCM authenticated storage with a rotation keyring and recipient/origin context. */
 component {
 
+    /**
+     * Validates the active AES-256 storage key and the retained decryption keyring.
+     */
     function init( required string activeKeyId, required struct keys ) {
         variables.activeKeyId = arguments.activeKeyId;
         variables.keys = {};
@@ -30,6 +33,10 @@ component {
         return this;
     }
 
+    /**
+     * Encrypts subscription JSON with the active storage key and authenticated owner/origin context.
+     * @returns string
+     */
     public string function seal( required struct subscription, required string context ) {
         validateContext( arguments.context );
         var iv = binaryDecode( repeatString( "00", 12 ), "hex" );
@@ -50,6 +57,10 @@ component {
         } );
     }
 
+    /**
+     * Decrypts a subscription using its saved key ID and authenticated context.
+     * @returns struct
+     */
     public struct function unseal( required string sealedData, required string context ) {
         validateContext( arguments.context );
         try {
@@ -83,12 +94,23 @@ component {
         }
     }
 
+    /**
+     * Builds the authenticated bytes that bind ciphertext to its key ID and recipient/origin context.
+     * @returns any
+     */
     private any function aad( required string keyId, required string context ) {
         return charsetDecode( "megaphone-webpush:v1:" & arguments.keyId & ":" & arguments.context, "UTF-8" );
     }
+    /**
+     * Measures the decoded binary value in bytes.
+     * @returns numeric
+     */
     private numeric function byteLength( required any value ) {
         return createObject( "java", "java.lang.reflect.Array" ).getLength( arguments.value );
     }
+    /**
+     * Requires a valid recipient/origin context before encrypting or decrypting.
+     */
     private void function validateContext( required string context ) {
         if ( !len( trim( arguments.context ) ) ) {
             throw(

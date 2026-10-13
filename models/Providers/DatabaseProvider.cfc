@@ -2,6 +2,10 @@ component extends="BaseProvider" accessors="true" {
 
     property name="wirebox" inject="wirebox";
 
+    /**
+     * Prepares one durable delivery without sending it.
+     * @returns DeliveryPreparation
+     */
     public DeliveryPreparation function prepareDelivery(
         required any notifiable,
         required any notification,
@@ -27,6 +31,10 @@ component extends="BaseProvider" accessors="true" {
         } );
     }
 
+    /**
+     * Sends one prepared delivery and returns an explicit transport outcome.
+     * @returns DeliveryResult
+     */
     public DeliveryResult function sendDelivery( required any prepared, required any delivery ) {
         var data = arguments.prepared.getData();
         var entry = variables.wirebox
@@ -43,10 +51,18 @@ component extends="BaseProvider" accessors="true" {
         return new megaphone.models.DeliveryResult( { "status": "accepted", "providerReference": entry.getId() } );
     }
 
+    /**
+     * Returns the Provider type used to validate channel configuration.
+     * @returns string
+     */
     public string function getProviderName() {
         return "DatabaseProvider";
     }
 
+    /**
+     * Sends a populated Notification synchronously through its enabled channels.
+     * @returns BaseNotification
+     */
     public BaseNotification function notify( required any notifiable, required BaseNotification notification ) {
         newQueryBuilder()
             .table( getTableName() )
@@ -62,6 +78,10 @@ component extends="BaseProvider" accessors="true" {
         return arguments.notification;
     }
 
+    /**
+     * Returns the configured table name, or this store's default.
+     * @returns string
+     */
     public string function getTableName() {
         var properties = getProperties();
         return structKeyExists( properties, "table" ) ? properties.table : "megaphone_notifications";
@@ -89,6 +109,10 @@ component extends="BaseProvider" accessors="true" {
         return expression;
     }
 
+    /**
+     * Binds the captured timestamp text using the channel's database adapter.
+     * @returns struct
+     */
     public struct function bindCursorTimestamp( required string timestamp ) {
         var properties = getProperties();
         return {
@@ -97,6 +121,10 @@ component extends="BaseProvider" accessors="true" {
         };
     }
 
+    /**
+     * Validates and binds the ID used to break cursor timestamp ties.
+     * @returns struct
+     */
     public struct function bindCursorIdentifier( required string id ) {
         var properties = getProperties();
         var pattern = structKeyExists( properties, "cursorIdentifierPattern" ) ? properties.cursorIdentifierPattern : "";
@@ -115,6 +143,10 @@ component extends="BaseProvider" accessors="true" {
         return structKeyExists( properties, "inboxState" ) && properties.inboxState;
     }
 
+    /**
+     * Returns query options with an explicitly configured datasource taking precedence.
+     * @returns struct
+     */
     public struct function getQueryOptions() {
         var options = {};
         var properties = getProperties();
@@ -127,6 +159,10 @@ component extends="BaseProvider" accessors="true" {
         return options;
     }
 
+    /**
+     * Supplies a fresh QueryBuilder through WireBox.
+     * @returns QueryBuilder
+     */
     private QueryBuilder function newQueryBuilder() provider="QueryBuilder@qb" {
     }
 

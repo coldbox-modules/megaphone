@@ -1,6 +1,10 @@
 /** Ordered application scopes, from the broadest to the most specific. */
 component singleton {
 
+    /**
+     * Applies scopes from broadest to most specific, tracking the source of each effective channel choice.
+     * @returns struct
+     */
     public struct function resolve( required struct defaults, array scopes = [] ) {
         var resolved = {};
         for ( var channel in arguments.defaults ) {

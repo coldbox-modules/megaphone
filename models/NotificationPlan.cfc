@@ -6,6 +6,10 @@ component accessors="true" {
     property name="admitAfter" setter="false";
     property name="queueOptions" setter="false";
 
+    /**
+     * Copies captured event, delivery, admission-cutoff, and queue-routing data; empty values support memento restoration.
+     * @returns NotificationPlan
+     */
     public NotificationPlan function init(
         struct event = {},
         array deliveries = [],
@@ -21,6 +25,10 @@ component accessors="true" {
         return this;
     }
 
+    /**
+     * Restores a versioned plan without recalculating its audience, channels, hashes, or queue routing.
+     * @returns NotificationPlan
+     */
     public NotificationPlan function populateFromMemento( required struct memento ) {
         if (
             ( arguments.memento.schemaVersion ?: 0 ) != 1 || !isStruct( arguments.memento.event ?: "" ) || !isArray(
@@ -47,17 +55,33 @@ component accessors="true" {
         return this;
     }
 
+    /**
+     * Returns the event data represented by this object.
+     * @returns struct
+     */
     public struct function getEvent() {
         return duplicate( variables.event );
     }
+    /**
+     * Returns the deliveries represented by this object.
+     * @returns array
+     */
     public array function getDeliveries() {
         return duplicate( variables.deliveries );
     }
 
+    /**
+     * Returns a copy of the connection and queue choices captured with this plan.
+     * @returns struct
+     */
     public struct function getQueueOptions() {
         return duplicate( variables.queueOptions );
     }
 
+    /**
+     * Returns the versioned plan data needed to restore the original delivery decisions.
+     * @returns struct
+     */
     public struct function getMemento() {
         var result = {
             "schemaVersion": 1,

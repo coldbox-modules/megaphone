@@ -2,16 +2,28 @@
 component {
 
     property name="wirebox" inject="wirebox";
+    /**
+     * Stores the channel properties used to configure the default push runtime.
+     * @returns WebPushRuntime
+     */
     public WebPushRuntime function init( required struct properties ) {
         variables.configuration = arguments.properties;
         return this;
     }
 
 
+    /**
+     * Checks the runtime's configured push feature flag.
+     * @returns boolean
+     */
     public boolean function enabled() {
         return structKeyExists( variables.configuration, "enabled" ) && variables.configuration.enabled;
     }
 
+    /**
+     * Returns the recipient/origin context used to bind stored subscription ciphertext.
+     * @returns string
+     */
     public string function context( required any user ) {
         if ( isCustomFunction( variables.configuration.context ?: "" ) ) {
             return variables.configuration.context( arguments.user );
@@ -19,6 +31,10 @@ component {
         return arguments.user.getNotifiableType() & "|" & arguments.user.getNotifiableId() & "|" & variables.configuration.origin;
     }
 
+    /**
+     * Creates the subscription cipher from the active storage key and keyring.
+     * @returns any
+     */
     public any function cipher() {
         return new megaphone.models.SubscriptionCipher(
             variables.configuration.activeStorageKeyId,
@@ -28,6 +44,10 @@ component {
         );
     }
 
+    /**
+     * Returns availability and the browser-compatible VAPID public key without exposing private keys.
+     * @returns struct
+     */
     public struct function enrollmentConfiguration() {
         if ( !enabled() ) {
             return { "available": false };
@@ -82,6 +102,10 @@ component {
         }
     }
 
+    /**
+     * Creates the configured Java Web Push transport after validating its keys and contact settings.
+     * @returns any
+     */
     public any function transport() {
         try {
             var factory = variables.wirebox.getInstance(

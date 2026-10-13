@@ -1,6 +1,9 @@
 /** Invoke exported JDK interfaces so older CFML reflection does not require opening internal modules. */
 component {
 
+    /**
+     * Creates the JDK HTTP client used by the push transport.
+     */
     function newClient( required any timeout ) {
         var builder = createObject( "java", "java.net.http.HttpClient" ).newBuilder();
         invokePublic(
@@ -25,6 +28,9 @@ component {
             []
         );
     }
+    /**
+     * Adds a request timeout through the public JDK HTTP interfaces.
+     */
     function withTimeout( required any builder, required any timeout ) {
         invokePublic(
             "java.net.http.HttpRequest$Builder",
@@ -41,6 +47,9 @@ component {
             []
         );
     }
+    /**
+     * Sends one prepared request through the public HTTP client interface.
+     */
     function send( required any client, required any preparedRequest, required any handler ) {
         return invokePublic(
             "java.net.http.HttpClient",
@@ -50,6 +59,9 @@ component {
             [ arguments.preparedRequest, arguments.handler ]
         );
     }
+    /**
+     * Reads a prepared request value through its public interface.
+     */
     function requestValue( required any preparedRequest, required string method ) {
         return invokePublic(
             "java.net.http.HttpRequest",
@@ -59,6 +71,9 @@ component {
             []
         );
     }
+    /**
+     * Reads a transport response value through its public interface.
+     */
     function responseValue( required any response, required string method ) {
         return invokePublic(
             "java.net.http.HttpResponse",
@@ -68,6 +83,9 @@ component {
             []
         );
     }
+    /**
+     * Measures the prepared request body in bytes.
+     */
     function bodyLength( required any preparedRequest ) {
         var publisher = requestValue( arguments.preparedRequest, "bodyPublisher" ).get();
         return invokePublic(
@@ -78,6 +96,10 @@ component {
             []
         );
     }
+    /**
+     * Invokes a public interface method without reflecting into a private implementation class.
+     * @returns any
+     */
     private any function invokePublic(
         required string interfaceName,
         required any target,

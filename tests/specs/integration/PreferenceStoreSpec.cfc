@@ -31,8 +31,8 @@ component extends="tests.specs.integration.DatabaseInboxSpec" {
                 save( "organization:deleted", "email", "on" );
                 save( "organization:live", "email", "off" );
                 save( "account", "email", "on" );
-                var stale = function( query ) {
-                    return query.where( "scopeKey", "organization:deleted" );
+                var stale = function( qb ) {
+                    return qb.where( "scopeKey", "organization:deleted" );
                 };
                 expect( variables.preferences.pruneChoices( stale, 1 ) ).toBe( 1 );
                 expect( variables.preferences.pruneChoices( stale, 1 ) ).toBe( 1 );

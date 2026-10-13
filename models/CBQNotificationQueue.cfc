@@ -5,6 +5,9 @@ component singleton {
     property name="wirebox" inject="wirebox";
     property name="moduleService" inject="box:moduleService";
 
+    /**
+     * Enqueues a delivery-ID job on the selected registered cbq connection and queue.
+     */
     public void function enqueue( required NotificationDelivery delivery, string connection, string queue ) {
         if ( !listFind( "queued,retryable,processing", arguments.delivery.getState() ) ) {
             return;

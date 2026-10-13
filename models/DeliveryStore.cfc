@@ -4,11 +4,19 @@ component accessors="true" {
     property name="properties" type="struct" setter="false";
     property name="uuidGenerator" inject="java:java.util.UUID";
 
+    /**
+     * Stores the delivery persistence configuration.
+     * @returns DeliveryStore
+     */
     public DeliveryStore function init( struct properties = {} ) {
         variables.properties = arguments.properties;
         return this;
     }
 
+    /**
+     * Persists one delivery without replacing work already stored for the same identity.
+     * @returns struct
+     */
     public struct function enqueue(
         required string eventId,
         required string recipientType,
@@ -115,11 +123,11 @@ component accessors="true" {
 
     /** lockRow requires the consumer's transaction and protects external lifecycle work. */
     public any function find( required string id, boolean lockRow = false ) {
-        var query = newDeliveryQuery().where( "id", arguments.id );
+        var qb = newDeliveryQuery().where( "id", arguments.id );
         if ( arguments.lockRow ) {
-            query.lockForUpdate();
+            qb.lockForUpdate();
         }
-        var rows = query.get();
+        var rows = qb.get();
         if ( rows.isEmpty() ) {
             return;
         }
@@ -129,11 +137,11 @@ component accessors="true" {
     /** Trusted backend listing. Application constraints run before stable ordering and pagination. */
     public struct function getPage( numeric maxRows = 50, numeric offset = 0, any constraints ) {
         var size = max( 1, min( 200, fix( arguments.maxRows ) ) );
-        var query = newDeliveryQuery().from( ( getTableName() ) & " AS delivery" ).select( "delivery.*" );
+        var qb = newDeliveryQuery().from( ( getTableName() ) & " AS delivery" ).select( "delivery.*" );
         if ( !isNull( arguments.constraints ) ) {
-            arguments.constraints( query );
+            arguments.constraints( qb );
         }
-        var rows = query
+        var rows = qb
             .clearOrders()
             .orderBy( "delivery.updatedDate", "desc" )
             .orderBy( "delivery.id" )
@@ -149,11 +157,11 @@ component accessors="true" {
 
     /** Trusted backend reconciliation: filters apply before aggregate counts. */
     public array function stateCounts( any constraints ) {
-        var query = newDeliveryQuery().from( ( getTableName() ) & " AS delivery" );
+        var qb = newDeliveryQuery().from( ( getTableName() ) & " AS delivery" );
         if ( !isNull( arguments.constraints ) ) {
-            arguments.constraints( query );
+            arguments.constraints( qb );
         }
-        return query
+        return qb
             .select( [ "delivery.channel", "delivery.state" ] )
             .selectRaw( "COUNT(DISTINCT delivery.id) AS total" )
             .groupBy( [ "delivery.channel", "delivery.state" ] )
@@ -162,6 +170,10 @@ component accessors="true" {
             .get();
     }
 
+    /**
+     * Loads the stored deliveries belonging to an event.
+     * @returns array
+     */
     public array function forEvent( required string eventId ) {
         return newDeliveryQuery()
             .where( "eventId", arguments.eventId )
@@ -187,6 +199,10 @@ component accessors="true" {
         );
     }
 
+    /**
+     * Checks whether this delivery has an outcome eligible for explicit recovery.
+     * @returns boolean
+     */
     public boolean function canRecover( required struct delivery ) {
         return listFind( "retryable,permanent", arguments.delivery.state ) > 0 && arguments.delivery.recoveryAllowance < (
             structKeyExists( variables.properties, "maxRecoveryAllowance" ) ? variables.properties.maxRecoveryAllowance : 45
@@ -296,6 +312,10 @@ component accessors="true" {
         }
     }
 
+    /**
+     * Finds the receipt for a stable recovery request key, or returns null.
+     * @returns any
+     */
     public any function getRecoveryRequest( required string id, required string requestKey ) {
         var rows = newRecoveryQuery()
             .where( "deliveryId", arguments.id )
@@ -307,6 +327,10 @@ component accessors="true" {
         return rows[ 1 ];
     }
 
+    /**
+     * Loads a bounded page of recovery receipts for a delivery.
+     * @returns struct
+     */
     public struct function recoveryHistory( required string id, numeric maxRows = 20, numeric offset = 0 ) {
         var size = max( 1, min( 200, fix( arguments.maxRows ) ) );
         var rows = newRecoveryQuery()
@@ -323,6 +347,10 @@ component accessors="true" {
         return { results: rows, hasMore: more };
     }
 
+    /**
+     * Builds a query for the configured delivery recovery table.
+     * @returns any
+     */
     private any function newRecoveryQuery() {
         return newQueryBuilder()
             .from( variables.properties.recoveriesTable ?: "megaphone_delivery_recoveries" )
@@ -550,11 +578,11 @@ component accessors="true" {
         if ( arguments.limit < 1 || fix( arguments.limit ) != arguments.limit ) {
             throw( type = "Megaphone.Delivery.InvalidBatch", message = "Batch size must be a positive integer." );
         }
-        var query = newDeliveryQuery();
+        var qb = newDeliveryQuery();
         if ( !isNull( arguments.constraints ) ) {
-            arguments.constraints( query );
+            arguments.constraints( qb );
         }
-        return query
+        return qb
             .whereIn( "state", [ "queued", "retryable" ] )
             .where( "availableDate", "<=", arguments.clock )
             .orderBy( "availableDate" )
@@ -564,6 +592,10 @@ component accessors="true" {
             .map( ( row ) => decode( row ) );
     }
 
+    /**
+     * Loads the transport attempts for a delivery in attempt order.
+     * @returns array
+     */
     public array function attempts( required string id ) {
         return newAttemptQuery()
             .where( "deliveryId", arguments.id )
@@ -618,7 +650,7 @@ component accessors="true" {
         var attemptsTable = variables.properties.attemptsTable ?: "megaphone_delivery_attempts";
         var candidates = newAttemptQuery()
             .where( "finishedDate", "<", arguments.beforeDate )
-            .whereExists( ( query ) => query
+            .whereExists( ( qb ) => qb
                 .from( deliveryTable )
                 .selectRaw( "1" )
                 .whereColumn( deliveryTable & ".id", attemptsTable & ".deliveryId" )
@@ -668,7 +700,7 @@ component accessors="true" {
             .from( eventTable )
             .mergeDefaultOptions( getQueryOptions() )
             .where( "createdDate", "<", arguments.eventsBefore )
-            .whereNotExists( ( query ) => query
+            .whereNotExists( ( qb ) => qb
                 .from( deliveryTable )
                 .selectRaw( "1" )
                 .whereColumn( deliveryTable & ".eventId", eventTable & ".id" )
@@ -730,12 +762,18 @@ component accessors="true" {
         return removed;
     }
 
+    /**
+     * Requires a bounded positive integer for maintenance batch sizes.
+     */
     private void function validateBatch( required numeric limit ) {
         if ( arguments.limit < 1 || fix( arguments.limit ) != arguments.limit ) {
             throw( type = "Megaphone.Delivery.InvalidBatch", message = "Batch size must be a positive integer." );
         }
     }
 
+    /**
+     * Records a terminal or deferred outcome using the current claim token.
+     */
     private void function settle(
         required struct row,
         required string outcome,
@@ -766,31 +804,63 @@ component accessors="true" {
             } );
     }
 
+    /**
+     * Converts stored JSON payload fields into application values.
+     * @returns struct
+     */
     private struct function decode( required struct row ) {
         var decoded = duplicate( arguments.row );
         decoded.routingData = deserializeJSON( decoded.routingData );
         return decoded;
     }
+    /**
+     * Builds a nullable timestamp binding for storage writes.
+     * @returns struct
+     */
     private struct function timestamp( any value ) {
         return { "value": arguments.value ?: "", "null": isNull( arguments.value ), "cfsqltype": "timestamp" };
     }
+    /**
+     * Builds an explicit string binding for identifiers stored as text.
+     * @returns struct
+     */
     private struct function textBinding( required string value ) {
         return { "value": arguments.value, "null": false, "cfsqltype": "varchar" };
     }
+    /**
+     * Generates an identifier using the injected UUID generator.
+     * @returns string
+     */
     private string function uuid() {
         return variables.uuidGenerator.randomUUID().toString();
     }
+    /**
+     * Builds a query for the configured delivery table.
+     * @returns any
+     */
     private any function newDeliveryQuery() {
         return newQueryBuilder().from( getTableName() ).mergeDefaultOptions( getQueryOptions() );
     }
+    /**
+     * Builds a query for the configured attempt table.
+     * @returns any
+     */
     private any function newAttemptQuery() {
         return newQueryBuilder()
             .from( variables.properties.attemptsTable ?: "megaphone_delivery_attempts" )
             .mergeDefaultOptions( getQueryOptions() );
     }
+    /**
+     * Returns the configured table name, or this store's default.
+     * @returns string
+     */
     public string function getTableName() {
         return variables.properties.table ?: "megaphone_deliveries";
     }
+    /**
+     * Returns query options with an explicitly configured datasource taking precedence.
+     * @returns struct
+     */
     public struct function getQueryOptions() {
         var options = duplicate( variables.properties.queryOptions ?: {} );
         if ( variables.properties.keyExists( "datasource" ) ) {
@@ -799,6 +869,10 @@ component accessors="true" {
         return options;
     }
 
+    /**
+     * Supplies a fresh QueryBuilder through WireBox.
+     * @returns QueryBuilder
+     */
     private QueryBuilder function newQueryBuilder() provider="QueryBuilder@qb" {
     }
 

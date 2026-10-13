@@ -2,7 +2,19 @@ component singleton {
 
     property name="wirebox" inject="wirebox";
 
-    /** Keyset pages survive new arrivals and deletion of the boundary row. Existing offset APIs remain compatible. */
+    /**
+     * Returns a forward-only inbox page using the last seen timestamp and ID.
+     * New arrivals and deletion of the boundary row do not shift that position.
+     *
+     * @notifiable The owner whose notifications can be read.
+     * @channelName The configured Database Provider channel.
+     * @afterCursor A token from the preceding page, or empty for the first page.
+     * @maxRows The number of notifications to return.
+     * @constraints Application authorization constraints, also retained for mutations.
+     * @archiveMode Which archive state to display: active, archived, or all.
+     * @unread Whether to display only unread entries.
+     * @returns DatabaseNotificationKeysetCursor
+     */
     public DatabaseNotificationKeysetCursor function getNotificationsAfter(
         required any notifiable,
         string channelName = "database",
@@ -14,20 +26,21 @@ component singleton {
     ) {
         var source = cursor( argumentCollection = arguments );
         var provider = source.getChannel();
-        var query = source.getQB();
+        var qb = source.getQB();
         if ( arguments.unread ) {
-            query.whereNull( "readDate" );
+            qb.whereNull( "readDate" );
         }
+        // Mutations keep ownership/authorization, independently of unread, archive, and page filters.
         var mutationQuery = source.getMutationQuery().clone();
         if ( len( arguments.afterCursor ) ) {
             var boundary = decodeCursor( arguments.afterCursor, arguments.notifiable );
-            query.where( ( nested ) => nested
+            qb.where( ( nested ) => nested
                 .where( "createdDate", "<", provider.bindCursorTimestamp( boundary.timestamp ) )
                 .orWhere( ( tied ) => tied
                     .where( "createdDate", provider.bindCursorTimestamp( boundary.timestamp ) )
                     .where( "id", "<", provider.bindCursorIdentifier( boundary.id ) ) ) );
         }
-        var rows = query
+        var rows = qb
             .select( provider.getTableName() & ".*" )
             .selectRaw( provider.getCursorTimestampExpression() & " AS cursor_timestamp" )
             .orderByDesc( "createdDate" )
@@ -58,7 +71,7 @@ component singleton {
             "hasMore": hasMore
         };
         var nextArguments = structCopy( arguments );
-        return new megaphone.models.DatabaseNotificationKeysetCursor(
+        return newDatabaseNotificationKeysetCursor().configure(
             page.results,
             page.nextCursor,
             page.hasMore,
@@ -69,6 +82,10 @@ component singleton {
         );
     }
 
+    /**
+     * Returns a numbered cursor over the Notifiable's authorized notifications.
+     * @returns DatabaseNotificationCursor
+     */
     public DatabaseNotificationCursor function getNotifications(
         required any notifiable,
         string channelName = "database",
@@ -80,6 +97,10 @@ component singleton {
         return cursor( argumentCollection = arguments ).fetch();
     }
 
+    /**
+     * Returns a numbered cursor over the Notifiable's read notifications.
+     * @returns DatabaseNotificationCursor
+     */
     public DatabaseNotificationCursor function getReadNotifications(
         required any notifiable,
         string channelName = "database",
@@ -93,6 +114,10 @@ component singleton {
             .fetch();
     }
 
+    /**
+     * Returns a numbered cursor over the Notifiable's unread notifications.
+     * @returns DatabaseNotificationCursor
+     */
     public DatabaseNotificationCursor function getUnreadNotifications(
         required any notifiable,
         string channelName = "database",
@@ -106,6 +131,10 @@ component singleton {
             .fetch();
     }
 
+    /**
+     * Counts unread notifications after applying ownership and authorization constraints.
+     * @returns numeric
+     */
     public numeric function countUnreadNotifications(
         required any notifiable,
         string channelName = "database",
@@ -134,6 +163,12 @@ component singleton {
         return result.getResults()[ 1 ];
     }
 
+    /**
+     * Captures the currently matching, authorized inbox IDs without a page limit.
+     * @constraints Application authorization or selection constraints for the snapshot.
+     * @archiveMode Which archive state to capture; defaults to all.
+     * @returns array
+     */
     public array function snapshotIds(
         required any notifiable,
         string channelName = "database",
@@ -148,6 +183,12 @@ component singleton {
             .map( ( row ) => toString( row.id ) );
     }
 
+    /**
+     * Marks captured IDs only when they remain owned, authorized, and unread; later arrivals are excluded.
+     * @ids The IDs captured by snapshotIds() or taken from a displayed page.
+     * @constraints The current authorization constraints for this operation.
+     * @readDate The first-read timestamp to set on captured unread entries.
+     */
     public void function markSnapshotAsRead(
         required any notifiable,
         required array ids,
@@ -256,40 +297,39 @@ component singleton {
         return ids.len();
     }
 
+    /**
+     * Serializes a cursor boundary as unpadded URL-safe base64.
+     * @boundary The exact timestamp, ID, and owning Notifiable identity.
+     * @returns string
+     */
     private string function encodeCursor( required struct boundary ) {
-        return replace(
-            replace(
-                replace(
-                    toBase64( serializeJSON( arguments.boundary ), "UTF-8" ),
-                    "+",
-                    "-",
-                    "all"
-                ),
-                "/",
-                "_",
-                "all"
-            ),
-            "=",
-            "",
-            "all"
-        );
+        var serializedBoundary = serializeJSON( arguments.boundary );
+        var encodedBoundary = toBase64( serializedBoundary, "UTF-8" );
+        var withoutPlusSigns = replace( encodedBoundary, "+", "-", "all" );
+        var withoutSlashes = replace( withoutPlusSigns, "/", "_", "all" );
+        var withoutPadding = replace( withoutSlashes, "=", "", "all" );
+        return withoutPadding;
     }
 
+    /**
+     * Validates and decodes a boundary for this Notifiable without losing timestamp precision.
+     * @token An unpadded URL-safe base64 cursor from a preceding page.
+     * @notifiable The owner against whom the cursor identity is checked.
+     * @returns struct
+     */
     private struct function decodeCursor( required string token, required any notifiable ) {
         try {
             if ( len( arguments.token ) > 1024 || !reFind( "^[A-Za-z0-9_-]+$", arguments.token ) ) {
                 throw( message = "Invalid token." );
             }
-            var encoded = replace(
-                replace( arguments.token, "-", "+", "all" ),
-                "_",
-                "/",
-                "all"
-            );
+            var withPlusSigns = replace( arguments.token, "-", "+", "all" );
+            var encoded = replace( withPlusSigns, "_", "/", "all" );
             while ( len( encoded ) mod 4 ) {
                 encoded &= "=";
             }
-            var boundary = deserializeJSON( charsetEncode( binaryDecode( encoded, "base64" ), "UTF-8" ) );
+            var decodedBytes = binaryDecode( encoded, "base64" );
+            var boundaryJSON = charsetEncode( decodedBytes, "UTF-8" );
+            var boundary = deserializeJSON( boundaryJSON );
             if (
                 !isStruct( boundary ) || !isSimpleValue( boundary.id ?: [] ) || !len( boundary.id ) || len(
                     boundary.id
@@ -300,7 +340,7 @@ component singleton {
             ) {
                 throw( message = "Invalid boundary." );
             }
-            createObject( "java", "java.sql.Timestamp" ).valueOf( boundary.timestamp );
+            validateCursorTimestamp( boundary.timestamp );
             return boundary;
         } catch ( any ignored ) {
             throw(
@@ -310,6 +350,20 @@ component singleton {
         }
     }
 
+    /**
+     * Rejects timestamps that JDBC cannot parse. Keep the original cursor text;
+     * converting it to a CFML date would discard fractional-second precision.
+     *
+     * @timestamp The database timestamp text captured in the cursor.
+     */
+    private void function validateCursorTimestamp( required string timestamp ) {
+        createObject( "java", "java.sql.Timestamp" ).valueOf( arguments.timestamp );
+    }
+
+    /**
+     * Builds the shared ownership/authorization queries and applies display filters to the read query.
+     * @returns DatabaseNotificationCursor
+     */
     private DatabaseNotificationCursor function cursor(
         required any notifiable,
         string channelName = "database",
@@ -371,6 +425,15 @@ component singleton {
             .setMutationQuery( mutationQuery )
             .setPage( arguments.initialPage )
             .setMaxRows( arguments.maxRows );
+    }
+
+    /**
+     * Supplies a fresh keyset cursor using the application's WireBox mapping.
+     * @returns DatabaseNotificationKeysetCursor
+     */
+    private DatabaseNotificationKeysetCursor function newDatabaseNotificationKeysetCursor()
+        provider="DatabaseNotificationKeysetCursor@megaphone"
+    {
     }
 
 }

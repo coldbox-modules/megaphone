@@ -4,10 +4,18 @@ component extends="BaseProvider" accessors="true" implements="megaphone.models.I
     property name="subscriptions" inject="PushSubscriptionService@megaphone";
     property name="wirebox" inject="wirebox";
 
+    /**
+     * Returns the Provider type used to validate channel configuration.
+     * @returns string
+     */
     public string function getProviderName() {
         return "WebPushProvider";
     }
 
+    /**
+     * Selects owned active destinations and applies notification-specific device exclusions.
+     * @returns array
+     */
     public array function getDeliveryTargets( required any notifiable, required any notification ) {
         var route = routeNotificationFor(
             "WebPush",
@@ -33,6 +41,10 @@ component extends="BaseProvider" accessors="true" implements="megaphone.models.I
             .map( ( device ) => device.id );
     }
 
+    /**
+     * Validates and encrypts a browser subscription using the recipient's runtime context.
+     * @returns string
+     */
     public string function sealSubscription( required any notifiable, required struct subscription ) {
         var runtime = getRuntime();
         if ( !runtime.enabled() ) {
@@ -58,6 +70,10 @@ component extends="BaseProvider" accessors="true" implements="megaphone.models.I
         }
     }
 
+    /**
+     * Sends a populated Notification synchronously through its enabled channels.
+     * @returns BaseNotification
+     */
     public BaseNotification function notify( required any notifiable, required BaseNotification notification ) {
         for ( var deviceId in getDeliveryTargets( arguments.notifiable, arguments.notification ) ) {
             var delivery = new megaphone.models.NotificationDelivery( {
@@ -75,6 +91,10 @@ component extends="BaseProvider" accessors="true" implements="megaphone.models.I
         return arguments.notification;
     }
 
+    /**
+     * Prepares one durable delivery without sending it.
+     * @returns DeliveryPreparation
+     */
     public DeliveryPreparation function prepareDelivery(
         required any notifiable,
         required any notification,
@@ -139,6 +159,10 @@ component extends="BaseProvider" accessors="true" implements="megaphone.models.I
         } );
     }
 
+    /**
+     * Sends one prepared delivery and returns an explicit transport outcome.
+     * @returns DeliveryResult
+     */
     public DeliveryResult function sendDelivery( required any prepared, required any delivery ) {
         var data = arguments.prepared.getData();
         var current = variables.subscriptions.getActiveRegistration( data.notifiable, arguments.delivery.getDeviceId() );
@@ -167,6 +191,10 @@ component extends="BaseProvider" accessors="true" implements="megaphone.models.I
         return new megaphone.models.DeliveryResult( outcome );
     }
 
+    /**
+     * Resolves the application override or the default Web Push runtime lazily.
+     * @returns any
+     */
     private any function getRuntime() {
         var properties = getProperties();
         var configured = structKeyExists( properties, "runtime" ) ? properties.runtime : "";
@@ -179,6 +207,10 @@ component extends="BaseProvider" accessors="true" implements="megaphone.models.I
         return variables.wirebox.getInstance( "WebPushRuntime@megaphone", { "properties": getProperties() } );
     }
 
+    /**
+     * Creates a typed Provider preparation decision from a status and reason.
+     * @returns DeliveryPreparation
+     */
     private DeliveryPreparation function preparation( required string status, required string reason ) {
         return new megaphone.models.DeliveryPreparation( { "status": arguments.status, "reason": arguments.reason } );
     }

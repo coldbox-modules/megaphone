@@ -24,6 +24,10 @@ component accessors="true" {
     property name="created" setter="false";
     property name="attributes" setter="false";
 
+    /**
+     * Copies persisted delivery fields into the public delivery object.
+     * @returns NotificationDelivery
+     */
     public NotificationDelivery function init( struct data = {} ) {
         variables.attributes = duplicate( arguments.data.attributes ?: {} );
         for ( var key in arguments.data ) {
@@ -45,6 +49,10 @@ component accessors="true" {
         return this;
     }
 
+    /**
+     * Returns this object's public data as a serializable memento.
+     * @returns struct
+     */
     public struct function getMemento() {
         var result = { "attributes": duplicate( variables.attributes ) };
         for (

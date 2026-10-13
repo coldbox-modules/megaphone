@@ -5,6 +5,10 @@ component accessors="true" {
     property name="receipt" setter="false";
     property name="delivery" setter="false";
 
+    /**
+     * Loads a recovery result and wraps its receipt as a public object.
+     * @returns DeliveryRecoveryResult
+     */
     public DeliveryRecoveryResult function init( required struct data ) {
         for ( var key in arguments.data ) {
             if ( !isNull( arguments.data[ key ] ) ) {
@@ -15,6 +19,10 @@ component accessors="true" {
         }
         return this;
     }
+    /**
+     * Returns this object's public data as a serializable memento.
+     * @returns struct
+     */
     public struct function getMemento() {
         var result = { "status": variables.status };
         if ( !isNull( variables.replayed ) ) {
