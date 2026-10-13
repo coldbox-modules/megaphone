@@ -12,6 +12,8 @@
 
 ## API alignment
 
+- NotificationPlan defaults its event and deliveries to empty values, so saved plans can be restored with a no-argument constructor.
+
 - cbq is an optional application dependency. Using the cbq adapter without cbq throws `Megaphone.Queue.MissingCBQ`; synchronous notifications, custom adapters, and polling do not require it.
 
 - Queue configuration uses `queue` settings, with `defaultConnection` and `defaultQueue` for cbq routing.

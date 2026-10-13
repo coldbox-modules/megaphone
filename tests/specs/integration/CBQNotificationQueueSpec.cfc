@@ -315,7 +315,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                     queue = "saved-queue"
                 );
                 var saved = deserializeJSON( serializeJSON( plan.getMemento() ) );
-                var restored = new megaphone.models.NotificationPlan( {}, [] ).populateFromMemento( saved );
+                var restored = new megaphone.models.NotificationPlan().populateFromMemento( saved );
                 expect( restored.getQueueOptions() ).toBe( { "connection": "planned", "queue": "saved-queue" } );
                 variables.service.queuePlan( restored );
                 expect( firstProvider.getEntries()[ 1 ].queueName ).toBe( "saved-queue" );

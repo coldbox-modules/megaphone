@@ -52,7 +52,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                     variables.options
                 );
                 expect( variables.deliveries.getDueDeliveries() ).toBeEmpty();
-                var restored = new megaphone.models.NotificationPlan( {}, [] ).populateFromMemento(
+                var restored = new megaphone.models.NotificationPlan().populateFromMemento(
                     deserializeJSON( serializeJSON( plan.getMemento() ) )
                 );
                 var publication = variables.service.queuePlan( restored );
@@ -85,7 +85,7 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                     {},
                     options
                 );
-                var restored = new megaphone.models.NotificationPlan( {}, [] ).populateFromMemento(
+                var restored = new megaphone.models.NotificationPlan().populateFromMemento(
                     deserializeJSON( serializeJSON( old.getMemento() ) )
                 );
                 expect(

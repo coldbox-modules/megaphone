@@ -7,8 +7,8 @@ component accessors="true" {
     property name="queueOptions" setter="false";
 
     public NotificationPlan function init(
-        required struct event,
-        required array deliveries,
+        struct event = {},
+        array deliveries = [],
         any admitAfter,
         struct queueOptions = {}
     ) {
