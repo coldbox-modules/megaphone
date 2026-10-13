@@ -2,6 +2,9 @@
     "app":{
         "cfengine":"adobe@2023.0.06"
     },
+    "jvm":{
+        "javaVersion":"openjdk17"
+    },
     "web":{
         "http":{
             "port":"51515"

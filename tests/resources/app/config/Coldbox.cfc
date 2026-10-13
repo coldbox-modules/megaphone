@@ -1,12 +1,23 @@
 component {
 
+    function detectEnvironment() {
+        return "testing";
+    }
+
     /**
      * Configure the ColdBox App For Production
      * https://coldbox.ortusbooks.com/getting-started/configuration
      */
     function configure() {
         moduleSettings = {
+            "cbq": { "configPath": "tests.resources.CBQTestConfig", "registerWorkers": false },
             "megaphone": {
+                "storage": {
+                    "events": { "table": "megaphone_events", "datasource": "megaphone" },
+                    "deliveries": { "table": "megaphone_deliveries", "datasource": "megaphone" },
+                    "preferences": { "table": "megaphone_preferences", "queryOptions": { "datasource": "megaphone" } },
+                    "subscriptions": { "table": "megaphone_subscriptions", "datasource": "megaphone" }
+                },
                 "channels": {
                     "database": {
                         "provider": "DatabaseProvider@megaphone",
@@ -48,7 +59,7 @@ component {
             // Extension Points
             applicationHelper: "includes/helpers/ApplicationHelper.cfm",
             viewsHelper: "",
-            modulesExternalLocation: [],
+            modulesExternalLocation: [ "/testingModuleRoot" ],
             viewsExternalLocation: "",
             layoutsExternalLocation: "",
             handlersExternalLocation: "",

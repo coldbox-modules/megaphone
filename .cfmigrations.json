@@ -16,5 +16,23 @@
                 "type": "mysql"
             }
         }
+    },
+    "cbq": {
+        "manager": "cfmigrations.models.QBMigrationManager",
+        "migrationsDirectory": "modules/cbq/resources/database/migrations/",
+        "seedsDirectory": "resources/database/seeds/",
+        "properties": {
+            "defaultGrammar": "MySQLGrammar@qb",
+            "schema": "${DB_NAME}",
+            "migrationsTable": "cbq_migrations",
+            "connectionInfo": {
+                "host": "${DB_HOST}",
+                "port": "${DB_PORT}",
+                "username": "${DB_USER}",
+                "password": "${DB_PASSWORD}",
+                "database": "${DB_NAME}",
+                "type": "mysql"
+            }
+        }
     }
 }

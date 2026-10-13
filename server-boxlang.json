@@ -1,0 +1,26 @@
+{
+    "name": "megaphone-boxlang-native",
+    "app": {
+        "cfengine": "boxlang@1",
+        "serverHomeDirectory": ".tmp/engines/boxlang-native"
+    },
+    "jvm": {
+        "javaVersion": "openjdk21_jdk",
+        "heapSize": 1024
+    },
+    "web": {
+        "http": {
+            "port": 51515
+        }
+    },
+    "openBrowser": false,
+    "cfconfig": {
+        "file": ".cfconfig.json"
+    },
+    "env": {
+        "MEGAPHONE_BOXLANG_MODE": "native"
+    },
+    "scripts": {
+        "onServerInitialInstall": "install bx-mysql,bx-mail,bx-esapi --noSave"
+    }
+}
