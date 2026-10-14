@@ -13,6 +13,26 @@ on:
       - development
 
 jobs:
+  release-title:
+    name: Validate feature release title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a scope for feature releases
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+
+          title = os.environ["PR_TITLE"]
+          if re.match(r"^feat(?:\(|!?[:])", title) and not re.match(r"^feat\([^)]+\):\s.+$", title):
+              print("::error::The release parser requires a scoped feature title, such as feat(digests): add named email digests")
+              sys.exit(1)
+          PY
+
   tests:
     runs-on: ubuntu-latest
     name: Tests (${{ matrix.engine.label || matrix.engine.cfengine }}, ${{ matrix.coldbox }})
