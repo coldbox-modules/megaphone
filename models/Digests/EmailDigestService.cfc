@@ -421,28 +421,27 @@ component singleton {
                 try {
                     var current = variables.store.subscription( candidate.id, true );
                     if (
-                        current.mode != "digest" || current.lastCutoffAt >= arguments.cutoff || current.timezone != zone || variables.hasher.digest(
+                        current.mode == "digest" && current.lastCutoffAt < arguments.cutoff && current.timezone == zone && variables.hasher.digest(
                             current.schedule
-                        ) != variables.hasher.digest( timing )
+                        ) == variables.hasher.digest( timing )
                     ) {
-                        continue;
-                    }
-                    var recipient = newNotificationRuntime().getNotifiable(
-                        current.notifiableType,
-                        current.notifiableId
-                    );
-                    var batch = variables.store.freeze(
-                        current,
-                        arguments.cutoff,
-                        ( candidates ) => selectItems(
-                            recipient,
-                            definition,
+                        var recipient = newNotificationRuntime().getNotifiable(
+                            current.notifiableType,
+                            current.notifiableId
+                        );
+                        var batch = variables.store.freeze(
                             current,
-                            candidates
-                        )
-                    );
-                    createBatchDelivery( current, batch );
-                    batches.append( batch );
+                            arguments.cutoff,
+                            ( candidates ) => selectItems(
+                                recipient,
+                                definition,
+                                current,
+                                candidates
+                            )
+                        );
+                        createBatchDelivery( current, batch );
+                        batches.append( batch );
+                    }
                 } catch ( any error ) {
                     transactionRollback();
                     rethrow;

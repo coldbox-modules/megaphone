@@ -129,6 +129,7 @@ component extends="tests.specs.integration.EmailDigestSpec" {
     }
     private array function together( required array work ) {
         var names = [];
+        var outcomes = [];
         var ready = createObject( "java", "java.util.concurrent.CountDownLatch" ).init(
             javacast( "int", arguments.work.len() )
         );
@@ -136,17 +137,19 @@ component extends="tests.specs.integration.EmailDigestSpec" {
         var seconds = createObject( "java", "java.util.concurrent.TimeUnit" ).SECONDS;
         for ( var task in arguments.work ) {
             var workerName = "digest" & replace( createUUID(), "-", "", "all" );
+            var outcome = createObject( "java", "java.util.concurrent.CompletableFuture" ).init();
+            outcomes.append( outcome );
             names.append( workerName );
-            thread name=workerName action="run" callback=task ready=ready start=start seconds=seconds {
+            thread name=workerName action="run" callback=task ready=ready start=start seconds=seconds outcome=outcome {
                 attributes.ready.countDown();
                 try {
                     if ( !attributes.start.await( javacast( "long", 10 ), attributes.seconds ) ) {
                         throw( message = "Worker start timed out." );
                     }
                     var callback = attributes.callback;
-                    thread.outcome = { "result": callback() };
+                    attributes.outcome.complete( { "result": callback() } );
                 } catch ( any error ) {
-                    thread.outcome = { "problem": error.message & " " & error.detail };
+                    attributes.outcome.complete( { "problem": error.message & " " & error.detail } );
                 }
             }
         }
@@ -155,14 +158,13 @@ component extends="tests.specs.integration.EmailDigestSpec" {
         thread action="join" name=names.toList() timeout=15000;
         expect( allReady ).toBeTrue();
         var results = [];
-        for ( var name in names ) {
-            expect( cfthread[ name ].status ).toBe( "COMPLETED" );
-            var outcome = cfthread[ name ].outcome;
-            if ( !structKeyExists( outcome, "result" ) ) {
-                throw( message = "Digest worker did not return a result: " & serializeJSON( outcome ) );
+        for ( var index = 1; index <= names.len(); index++ ) {
+            expect( cfthread[ names[ index ] ].status ).toBe( "COMPLETED" );
+            var answer = outcomes[ index ].get( javacast( "long", 1 ), seconds );
+            if ( !structKeyExists( answer, "result" ) ) {
+                throw( message = "Digest worker did not return a result: " & serializeJSON( answer ) );
             }
-            expect( outcome.problem ?: "" ).toBe( "" );
-            results.append( outcome.result );
+            results.append( answer.result );
         }
         return results;
     }
