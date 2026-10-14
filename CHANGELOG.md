@@ -1,4 +1,12 @@
 # v1.2.0
+## 14 Oct 2026 — 20:30:15 UTC
+
+### feat
+
++ __digests:__ release named email digests as 1.2.0 (#4) ([4cb3f7f](https://github.com/coldbox-modules/megaphone/commit/4cb3f7f1538ec3efb5017e9ca1b5b0e44aeb5b27))
+
+
+# v1.2.0
 
 ## Added
 
