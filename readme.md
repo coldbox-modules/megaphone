@@ -555,3 +555,7 @@ The core notification service, base notification, and inbox models live at the r
 | `Providers`, `Delegates`, `Interfaces` | Notification channels, notifiable delegates, and extension contracts |
 
 WireBox names such as `NotificationPlan@megaphone` and `WebPushRuntime@megaphone` stay the same. Prefer those mappings when creating or overriding module objects.
+
+### Named email digests
+
+Collect notifications through `EmailDigestProvider@megaphone` into independent named subscriptions and schedules. `EmailDigestService@megaphone` freezes due batches and sends them through a receipt-aware email channel. Collection, email acceptance, and uncertain sends remain separate states. See [Named email digests](docs/email-digests.md) for configuration, policies, scheduler integration, and per-digest unsubscribe.

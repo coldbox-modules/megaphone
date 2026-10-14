@@ -432,3 +432,7 @@ Use `getRecoveryVersion(delivery)` for an optimistic command token. `requestReco
 Apply `2026_10_12_180000_add_megaphone_notification_mapping.cfc` after the existing migrations. Backfill reconstruction mappings for existing events without changing payloads, hashes, delivery IDs, or queue references. Application readers of saved RC admissions must translate their old field names into the version 1 plan shape without resolving a new audience or preferences.
 
 The unreleased `DurableNotificationService`, `DeliveryDispatcher`, and struct-returning `getNotificationSlice()` API have been replaced. Stores remain persistence implementation details; consumers use the services above. Merging, package publication, consumer installation, and deployment are separate verification steps.
+
+## Named email digests
+
+See [Named email digests](docs/email-digests.md) for collection through the `emailDigest` channel, independent recipient schedules, consent and eligibility integration, durable batch dispatch, and digest-specific unsubscribe.

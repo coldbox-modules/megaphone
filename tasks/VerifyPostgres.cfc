@@ -5,7 +5,8 @@ component extends="commandbox-migrations.models.BaseMigrationCommand" {
         numeric port = 60363,
         string database = "megaphone_api",
         string password = "megaphone-test",
-        boolean roundtrip = true
+        boolean roundtrip = true,
+        string bundles = "tests.specs.integration.DatabaseInboxSpec,tests.specs.integration.EventStoreSpec,tests.specs.integration.DeliveryStoreSpec,tests.specs.integration.PreferenceStoreSpec,tests.specs.integration.SubscriptionStoreSpec,tests.specs.integration.EmailDigestSpec,tests.specs.integration.EmailDigestConcurrencySpec,tests.specs.unit.PreferenceResolverSpec,tests.specs.unit.SubscriptionCipherSpec,tests.specs.unit.EmailDigestScheduleSpec"
     ) {
         if ( !reFind( "^megaphone_api(_[a-f0-9]+)?$", arguments.database ) ) {
             throw( message = "Use an owned megaphone_api verification database." );
@@ -49,9 +50,7 @@ component extends="commandbox-migrations.models.BaseMigrationCommand" {
         fileSystemUtil.createMapping( "/qb", root & "/modules/qb" );
         fileSystemUtil.createMapping( "/cbpaginator", root & "/modules/qb/modules/cbpaginator" );
         fileSystemUtil.createMapping( "/str", root & "/modules/str" );
-        var result = new testbox.system.TestBox(
-            bundles = "tests.specs.integration.DatabaseInboxSpec,tests.specs.integration.EventStoreSpec,tests.specs.integration.DeliveryStoreSpec,tests.specs.integration.PreferenceStoreSpec,tests.specs.integration.SubscriptionStoreSpec,tests.specs.unit.PreferenceResolverSpec,tests.specs.unit.SubscriptionCipherSpec"
-        ).run( reporter = "json" );
+        var result = new testbox.system.TestBox( bundles = arguments.bundles ).run( reporter = "json" );
         fileWrite( root & "/.tmp/postgres-tests.json", result );
         var report = deserializeJSON( result );
         print.line( "PostgreSQL: " & report.totalPass & " passed, " & report.totalFail & " failed, " & report.totalError & " errors." );

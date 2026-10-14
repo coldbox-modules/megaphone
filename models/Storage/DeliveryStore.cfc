@@ -576,6 +576,49 @@ component accessors="true" {
         }
     }
 
+    /**
+     * Releases ambiguous work using verified nonacceptance without resetting its transport counts.
+     * @returns boolean
+     */
+    public boolean function reconcileRejection(
+        required string id,
+        required struct receipt,
+        date retryDate = now(),
+        date clock = now()
+    ) {
+        if (
+            !structKeyExists( arguments.receipt, "accepted" ) || !isBoolean( arguments.receipt.accepted ) || arguments.receipt.accepted ||
+            !isSimpleValue( arguments.receipt.providerReference ?: "" ) || !len(
+                trim( arguments.receipt.providerReference ?: "" )
+            ) || len( arguments.receipt.providerReference ) > 190
+        ) {
+            throw(
+                type = "Megaphone.Delivery.InvalidReceipt",
+                message = "Verified rejection requires accepted=false and an authoritative provider reference."
+            );
+        }
+        transaction {
+            var row = this.find( arguments.id, true );
+            if ( isNull( row ) || row.state != "ambiguous" ) {
+                return false;
+            }
+            newDeliveryQuery()
+                .where( "id", row.id )
+                .update( {
+                    "state": "retryable",
+                    "reason": "receipt-rejected",
+                    "providerReference": arguments.receipt.providerReference,
+                    "availableDate": arguments.retryDate,
+                    "updatedDate": arguments.clock,
+                    "settledDate": timestamp(),
+                    "leaseToken": textBinding( "" ),
+                    "leaseUntil": timestamp(),
+                    "transportStartedDate": timestamp()
+                } );
+            return true;
+        }
+    }
+
     /** Due rows are durable scheduling input; duplicate scheduler jobs are fenced by claim(). */
     public array function due( numeric limit = 100, date clock = now(), any constraints ) {
         if ( arguments.limit < 1 || fix( arguments.limit ) != arguments.limit ) {
@@ -607,9 +650,13 @@ component accessors="true" {
     }
 
     /** Recover lost jobs in bounded batches without retrying uncertain acceptance. */
-    public numeric function recoverExpired( numeric limit = 100, date clock = now() ) {
+    public numeric function recoverExpired( numeric limit = 100, date clock = now(), any constraints ) {
         validateBatch( arguments.limit );
-        var candidates = newDeliveryQuery()
+        var recoveryQuery = newDeliveryQuery();
+        if ( !isNull( arguments.constraints ) ) {
+            recoveryQuery.where( arguments.constraints );
+        }
+        var candidates = recoveryQuery
             .where( "state", "processing" )
             .where( "leaseUntil", "<=", arguments.clock )
             .orderBy( "leaseUntil" )
