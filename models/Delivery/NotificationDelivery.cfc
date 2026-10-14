@@ -66,7 +66,7 @@ component accessors="true" {
         for (
             var key in listToArray( "id,eventId,notifiableType,notifiableId,channelName,deviceId,routingData,routingHash,state,attemptCount,transportCount,recoveryAllowance,availableDate,createdDate,updatedDate,settledDate,leaseToken,leaseUntil,transportStartedDate,reason,providerReference,created" )
         ) {
-            if ( !isNull( variables[ key ] ) ) {
+            if ( structKeyExists( variables, key ) && !isNull( variables[ key ] ) ) {
                 result[ key ] = variables[ key ];
             }
         }

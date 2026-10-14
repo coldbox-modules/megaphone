@@ -51,7 +51,7 @@ component accessors="true" {
         for (
             var key in listToArray( "id,namespace,eventKey,version,type,payload,payloadHash,createdDate,notificationMapping,created,expired" )
         ) {
-            if ( !isNull( variables[ key ] ) ) {
+            if ( structKeyExists( variables, key ) && !isNull( variables[ key ] ) ) {
                 result[ key ] = variables[ key ];
             }
         }

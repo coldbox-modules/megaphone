@@ -26,6 +26,16 @@ component extends="tests.specs.integration.NotificationQueueSpec" {
                     createObject( "java", "java.security.spec.ECGenParameterSpec" ).init( "secp256r1" )
                 );
                 var pair = generator.generateKeyPair();
+                var classes = createObject( "java", "java.lang.Class" );
+                var noTypes = createObject( "java", "java.lang.reflect.Array" ).newInstance(
+                    classes.forName( "java.lang.Class" ),
+                    javacast( "int", 0 )
+                );
+                var noArguments = createObject( "java", "java.lang.reflect.Array" ).newInstance(
+                    classes.forName( "java.lang.Object" ),
+                    javacast( "int", 0 )
+                );
+                var keyEncoding = classes.forName( "java.security.Key" ).getMethod( "getEncoded", noTypes );
                 variables.properties = {
                     "enabled": true,
                     "origin": "https://app.example.test",
@@ -33,15 +43,10 @@ component extends="tests.specs.integration.NotificationQueueSpec" {
                     "allowedHosts": [ "push.example.test" ],
                     "activeStorageKeyId": "test",
                     "storageKeys": { "test": binaryEncode( binaryDecode( repeatString( "01", 32 ), "hex" ), "base64" ) },
-                    "publicKey": binaryEncode( pair.getPublic().getEncoded(), "base64" ),
-                    "privateKey": binaryEncode( pair.getPrivate().getEncoded(), "base64" ),
+                    "publicKey": binaryEncode( keyEncoding.invoke( pair.getPublic(), noArguments ), "base64" ),
+                    "privateKey": binaryEncode( keyEncoding.invoke( pair.getPrivate(), noArguments ), "base64" ),
                     "httpClient": variables.http
                 };
-                var classes = createObject( "java", "java.lang.Class" );
-                var noTypes = createObject( "java", "java.lang.reflect.Array" ).newInstance(
-                    classes.forName( "java.lang.Class" ),
-                    javacast( "int", 0 )
-                );
                 var point = classes
                     .forName( "java.security.interfaces.ECPublicKey" )
                     .getMethod( "getW", noTypes )

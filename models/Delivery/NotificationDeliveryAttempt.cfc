@@ -41,7 +41,7 @@ component accessors="true" {
         for (
             var key in listToArray( "id,deliveryId,number,leaseToken,outcome,providerReference,reason,startedDate,transportStartedDate,finishedDate" )
         ) {
-            if ( !isNull( variables[ key ] ) ) {
+            if ( structKeyExists( variables, key ) && !isNull( variables[ key ] ) ) {
                 result[ key ] = variables[ key ];
             }
         }

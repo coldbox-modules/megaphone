@@ -44,7 +44,7 @@ component accessors="true" {
         for (
             var key in listToArray( "id,deliveryId,requestKey,intentHash,actorId,actorLabel,priorState,priorAttemptCount,priorTransportCount,priorReason,priorProviderReference,additionalAttempts,createdDate" )
         ) {
-            if ( !isNull( variables[ key ] ) ) {
+            if ( structKeyExists( variables, key ) && !isNull( variables[ key ] ) ) {
                 result[ key ] = variables[ key ];
             }
         }

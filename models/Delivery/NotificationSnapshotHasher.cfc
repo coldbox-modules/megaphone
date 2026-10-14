@@ -43,7 +43,11 @@ component singleton {
         if ( isArray( arguments.value ) ) {
             var entries = [];
             for ( var index = 1; index <= arrayLen( arguments.value ); index++ ) {
-                entries.append( isNull( arguments.value[ index ] ) ? "null" : canonical( arguments.value[ index ] ) );
+                entries.append(
+                    !arrayIsDefined( arguments.value, index ) || isNull( arguments.value[ index ] ) ? "null" : canonical(
+                        arguments.value[ index ]
+                    )
+                );
             }
             return "[" & entries.toList( "," ) & "]";
         }

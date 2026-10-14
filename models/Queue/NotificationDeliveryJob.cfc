@@ -19,7 +19,7 @@ component extends="cbq.models.Jobs.AbstractJob" {
                 var availableDate = work.getState() == "processing" ? work.getLeaseUntil() : work.getAvailableDate();
                 // Allow exactly one provider-managed retry after this known safe result.
                 setMaxAttempts( getCurrentAttempt() + 1 );
-                release( max( 1, dateDiff( "s", now(), availableDate ) ) );
+                this.release( max( 1, dateDiff( "s", now(), availableDate ) ) );
             }
         }
         return outcome.getStatus();

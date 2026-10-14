@@ -44,7 +44,7 @@ component accessors="true" {
     public struct function getMemento() {
         var result = {};
         for ( var key in listToArray( "status,reason,retryDate" ) ) {
-            if ( !isNull( variables[ key ] ) ) {
+            if ( structKeyExists( variables, key ) && !isNull( variables[ key ] ) ) {
                 result[ key ] = variables[ key ];
             }
         }
