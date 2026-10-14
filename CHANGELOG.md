@@ -1,3 +1,11 @@
+# v1.1.1
+## 14 Oct 2026 — 20:06:04 UTC
+
+### other
+
++ __\*:__ feat: add named email digests (#3) ([0eee0e4](https://github.com/coldbox-modules/megaphone/commit/0eee0e4bd36f08e396889dd3a0dd8990971215f1))
+
+
 # v1.2.0
 
 ## Added
