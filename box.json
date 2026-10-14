@@ -20,9 +20,9 @@
     "shortDescription":"A protocol-based library for sending Notifications in ColdBox",
     "description":"A protocol-based library for sending Notifications in ColdBox",
     "scripts":{
-        "format":"cfformat run models/**/*.cfc,dsl/**/*.cfc,resources/**/*.cfc,tests/specs/**/*.cfc,tasks/**/*.cfc,tests/resources/**/*.cfc --overwrite",
-        "format:check":"cfformat check models/**/*.cfc,dsl/**/*.cfc,resources/**/*.cfc,tests/specs/**/*.cfc,tasks/**/*.cfc,tests/resources/**/*.cfc --verbose",
-        "format:watch":"cfformat watch models/**/*.cfc,dsl/**/*.cfc,resources/**/*.cfc,tests/specs/**/*.cfc,tasks/**/*.cfc,tests/resources/**/*.cfc",
+        "format":"cfformat run models/**/*.cfc,config/**/*.cfc,dsl/**/*.cfc,resources/**/*.cfc,tests/specs/**/*.cfc,tasks/**/*.cfc,tests/resources/**/*.cfc --overwrite",
+        "format:check":"cfformat check models/**/*.cfc,config/**/*.cfc,dsl/**/*.cfc,resources/**/*.cfc,tests/specs/**/*.cfc,tasks/**/*.cfc,tests/resources/**/*.cfc --verbose",
+        "format:watch":"cfformat watch models/**/*.cfc,config/**/*.cfc,dsl/**/*.cfc,resources/**/*.cfc,tests/specs/**/*.cfc,tasks/**/*.cfc,tests/resources/**/*.cfc",
         "install:cfpm":"cfpm install mysql,debugger",
         "onServerInitialInstall":"run-script install:cfpm"
     },

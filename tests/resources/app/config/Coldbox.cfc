@@ -12,7 +12,21 @@ component {
         moduleSettings = {
             "cbq": { "configPath": "tests.resources.CBQTestConfig", "registerWorkers": false },
             "megaphone": {
+                "digests": {
+                    "moduleSmoke": {
+                        "schedule": "everyWeekOn 1 09:00",
+                        "emailChannel": "email",
+                        "policy": "tests.resources.DigestPolicyFixture",
+                        "renderer": "tests.resources.DigestRendererFixture"
+                    }
+                },
+                "queue": { "notifiableResolver": "tests.resources.DigestNotifiableResolverFixture" },
                 "storage": {
+                    "digests": {
+                        "table": "megaphone_digest_subscriptions",
+                        "datasource": "megaphone",
+                        "queryOptions": { "timeout": 17 }
+                    },
                     "events": { "table": "megaphone_events", "datasource": "megaphone" },
                     "deliveries": { "table": "megaphone_deliveries", "datasource": "megaphone" },
                     "preferences": { "table": "megaphone_preferences", "queryOptions": { "datasource": "megaphone" } },
@@ -24,6 +38,7 @@ component {
                         "properties": { "tableName": "megaphone_notifications", "datasource": "megaphone" }
                     },
                     "email": { "provider": "EmailProvider@megaphone", "properties": {} },
+                    "emailDigest": { "provider": "EmailDigestProvider@megaphone", "properties": {} },
                     "slack": { "provider": "SlackProvider@megaphone", "properties": { "token": "fake-token" } }
                 }
             },
@@ -107,7 +122,12 @@ component {
          */
         modules = {
             // An array of modules names to load, empty means all of them
-            include: [],
+            include: [
+                "HTMLHelper",
+                "megaphone",
+                "cbmailservices",
+                "hyper"
+            ],
             // An array of modules names to NOT load, empty means none
             exclude: []
         };

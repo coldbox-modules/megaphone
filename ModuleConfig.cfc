@@ -13,8 +13,10 @@ component {
                 "events": {},
                 "deliveries": {},
                 "preferences": {},
-                "subscriptions": {}
+                "subscriptions": {},
+                "digests": {}
             },
+            "digests": {},
             "queue": {
                 "queueAdapter": "CBQNotificationQueue@megaphone",
                 "defaultConnection": "",
@@ -49,7 +51,8 @@ component {
             "events": "EventStore",
             "deliveries": "DeliveryStore",
             "preferences": "PreferenceStore",
-            "subscriptions": "SubscriptionStore"
+            "subscriptions": "SubscriptionStore",
+            "digests": "EmailDigestStore"
         };
         for ( var key in stores ) {
             var properties = settings.storage[ key ] ?: {};
@@ -65,6 +68,9 @@ component {
                 .initArg( name = "properties", value = properties );
         }
         variables.wirebox.getInstance( "NotificationService@megaphone" ).registerChannels( settings.channels ?: {} );
+        variables.wirebox
+            .getInstance( "NotificationService@megaphone" )
+            .registerChannels( { "emailDigestBatch": { "provider": "EmailDigestBatchProvider@megaphone", "properties": {} } } );
     }
 
 }

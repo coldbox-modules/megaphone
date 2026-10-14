@@ -1,3 +1,25 @@
+# v1.2.0
+
+## Added
+
+- EmailDigestProvider collects Notifications into independent named digests using `toEmailDigest()`, `notify()`, and captured notification plans.
+- Immediate subscriptions create one-item batches through the same digest policy, selection, renderer, and durable email transport, with no separate ordinary-email route. Immediate-only definitions require no calendar schedule.
+- EmailDigestService manages per-Notifiable Off, Immediate email, and Digest subscriptions with native ColdBox schedules and confirmed timezones.
+- Durable digest subscriptions, items, batches, and event admissions preserve stable identities, deduplicate overlapping publication, and freeze membership at atomic cutoffs.
+- The module ColdBox scheduler registers named digest tasks at startup and supports runtime digest and timezone registration. Native shortcuts, configuration closures, and unstarted task templates use ColdBox scheduling and timezone behavior.
+- Configurable item selection keeps all eligible items by default, discards omitted pre-cutoff candidates permanently, and never carries overflow into future digests.
+- `itemKey()` and `occurredAt()` helpers produce stable logical identities and integer UTC epoch milliseconds.
+- Batch preparation and dispatch reuse the existing receipt-aware email delivery, claim, attempt, retry, and recovery APIs.
+- Named policy and renderer contracts integrate application consent, current item eligibility, content, and digest-specific unsubscribe links. Consent and eligibility are checked again after rendering.
+- NotificationPublication exposes collection admissions separately through `getCollections()`; collection is never recorded as mail acceptance.
+- `reconcileNotAccepted()` permits retry of an ambiguous delivery only after authoritative nonacceptance evidence, preserving transport counts. `recoverExpired()` accepts optional maintenance constraints.
+
+## Configuration
+
+Configure definitions under `digests` and persistence under `storage.digests`. A definition supplies its schedule, policy, renderer, and receipt-aware email channel. Apply the additive digest migration on the same datasource as notification events and deliveries before collecting items.
+
+Existing synchronous Notifications and ordinary immediate email continue to use their configured channels. Subscription changes apply prospectively and do not replay old collected items. See [Named email digests](docs/email-digests.md) for integration examples.
+
 # v1.1.0
 
 ## Requirements

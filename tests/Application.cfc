@@ -16,7 +16,10 @@ component {
     this.mappings[ "/root" ] = rootPath;
     this.javaSettings = { "loadPaths": [ rootPath & "resources/java/webpush", rootPath & "modules/cbq/lib" ], "loadColdFusionClassPath": true };
     moduleDirectory = reReplace( rootPath, "[/\\]+$", "" );
-    this.mappings[ "/testingModuleRoot" ] = getDirectoryFromPath( moduleDirectory );
+    // A test-only override isolates module discovery when sibling module repositories are present.
+    this.mappings[ "/testingModuleRoot" ] = createObject( "java", "java.lang.System" ).getProperty(
+        "megaphone.testModuleRoot", getDirectoryFromPath( moduleDirectory )
+    );
     this.mappings[ "/megaphone" ] = rootPath;
     this.mappings[ "/qb" ] = rootPath & "/modules/qb";
     this.mappings[ "/cbpaginator" ] = rootPath & "/modules/qb/modules/cbpaginator";

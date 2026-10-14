@@ -123,10 +123,15 @@ component singleton accessors="true" {
             var preferences = arguments.notification.getChannelPreferences( notifiable, channelNames );
             for ( var channelName in channelNames ) {
                 var channel = getChannel( channelName );
+                var collects = isCustomFunction( channel.supportsCollection ?: "" ) && channel.supportsCollection();
                 if (
-                    !isCustomFunction( channel.prepareDelivery ?: "" ) || !isCustomFunction(
-                        channel.sendDelivery ?: ""
-                    ) || ( isCustomFunction( channel.supportsDurableDelivery ?: "" ) && !channel.supportsDurableDelivery() )
+                    !collects && (
+                        !isCustomFunction( channel.prepareDelivery ?: "" ) || !isCustomFunction(
+                            channel.sendDelivery ?: ""
+                        ) || (
+                            isCustomFunction( channel.supportsDurableDelivery ?: "" ) && !channel.supportsDurableDelivery()
+                        )
+                    )
                 ) {
                     throw(
                         type = "Megaphone.Configuration.UnsupportedDurableProvider",
@@ -148,6 +153,11 @@ component singleton accessors="true" {
                     arguments.notification.getDeliveryContext( notifiable, channelName )
                 );
                 var enabled = preferences[ channelName ].enabled;
+                if ( collects ) {
+                    routing.emailDigest = snapshotter.snapshot(
+                        channel.getCollectionIntent( notifiable, arguments.notification )
+                    );
+                }
                 var targets = [ "" ];
                 if ( enabled && isCustomFunction( channel.getDeliveryTargets ?: "" ) ) {
                     targets = channel.getDeliveryTargets( notifiable, arguments.notification );
@@ -166,6 +176,7 @@ component singleton accessors="true" {
                         "notifiableType": notifiable.getNotifiableType(),
                         "notifiableId": toString( notifiable.getNotifiableId() ),
                         "channelName": channelName,
+                        "collection": collects,
                         "deviceId": deviceId,
                         "enabled": enabled,
                         "routingData": routing,
@@ -229,13 +240,40 @@ component singleton accessors="true" {
             try {
                 var event = service.recordEvent( argumentCollection = captured.event );
                 if ( !event.getCreated() ) {
-                    return newNotificationPublication().configure(
-                        event,
-                        service.getDeliveriesForEvent( event.getId() )
-                    );
+                    var storedCollections = getStoredCollections( captured.deliveries, event.getId() );
+                    var storedDeliveries = service.getDeliveriesForEvent( event.getId() );
+                    for ( var collected in storedCollections ) {
+                        if ( len( collected.deliveryId ?: "" ) ) {
+                            storedDeliveries.append( service.getDelivery( collected.deliveryId ) );
+                        }
+                    }
+                    return newNotificationPublication().configure( event, storedDeliveries, storedCollections );
                 }
                 var deliveries = [];
+                var collections = [];
                 for ( var intent in captured.deliveries ) {
+                    if ( structKeyExists( intent, "collection" ) && intent.collection ) {
+                        var channel = getChannel( intent.channelName );
+                        if ( !isCustomFunction( channel.supportsCollection ?: "" ) || !channel.supportsCollection() ) {
+                            throw(
+                                type = "Megaphone.Digests.CollectionChannelChanged",
+                                message = "A saved collection plan requires its collection provider."
+                            );
+                        }
+                        var collected = channel.collectPlanned( event, intent );
+                        collections.append( collected );
+                        if ( len( collected.deliveryId ?: "" ) ) {
+                            var immediateDelivery = service.getDelivery( collected.deliveryId );
+                            deliveries.append( immediateDelivery );
+                            var queueImmediate = collected.created && immediateDelivery.getState() == "queued";
+                            if ( queueImmediate && !isNull( queueAdapter ) ) {
+                                var enqueueArguments = duplicate( queueOptions );
+                                enqueueArguments.delivery = immediateDelivery;
+                                queueAdapter.enqueue( argumentCollection = enqueueArguments );
+                            }
+                        }
+                        continue;
+                    }
                     var delivery = service.createDelivery( event.getId(), intent );
                     deliveries.append( delivery );
                     if ( delivery.getCreated() && delivery.getState() == "queued" && !isNull( queueAdapter ) ) {
@@ -244,7 +282,7 @@ component singleton accessors="true" {
                         queueAdapter.enqueue( argumentCollection = enqueueArguments );
                     }
                 }
-                return newNotificationPublication().configure( event, deliveries );
+                return newNotificationPublication().configure( event, deliveries, collections );
             } catch ( any error ) {
                 transactionRollback();
                 rethrow;
@@ -355,6 +393,30 @@ component singleton accessors="true" {
      * @returns any
      */
     private any function newDeliveryService() provider="NotificationDeliveryService@megaphone" {
+    }
+
+    /**
+     * Returns existing event admissions without collecting again or expanding the saved audience.
+     * @returns array
+     */
+    private array function getStoredCollections( required array intents, required string eventId ) {
+        var runtimeSettings = newNotificationRuntime().getSettings();
+        if ( structKeyExists( runtimeSettings, "digests" ) && !structIsEmpty( runtimeSettings.digests ) ) {
+            return newDigestService().getCollectionsForEvent( arguments.eventId );
+        }
+        for ( var intent in arguments.intents ) {
+            if ( structKeyExists( intent.routingData, "emailDigest" ) ) {
+                return newDigestService().getCollectionsForEvent( arguments.eventId );
+            }
+        }
+        return [];
+    }
+
+    /**
+     * Supplies the named digest service through WireBox.
+     * @returns any
+     */
+    private any function newDigestService() provider="EmailDigestService@megaphone" {
     }
 
     /**

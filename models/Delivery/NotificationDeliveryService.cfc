@@ -278,8 +278,33 @@ component singleton {
                 retrySeconds
             );
         }
-        if ( !variables.deliveryStore.startTransport( work.getId(), claimed.token ) ) {
-            return result( "superseded" );
+        try {
+            if ( isCustomFunction( channel.startDeliveryTransport ?: "" ) ) {
+                var transport = channel.startDeliveryTransport( prepared, work, claimed.token );
+                if ( !isInstanceOf( transport, "megaphone.models.Delivery.DeliveryPreparation" ) ) {
+                    throw(
+                        type = "Megaphone.Delivery.InvalidPreparation",
+                        message = "Transport guards return DeliveryPreparation."
+                    );
+                }
+                if ( transport.getStatus() != "ready" ) {
+                    return settlePreparation(
+                        work,
+                        claimed.token,
+                        transport,
+                        retrySeconds
+                    );
+                }
+            } else if ( !variables.deliveryStore.startTransport( work.getId(), claimed.token ) ) {
+                return result( "superseded" );
+            }
+        } catch ( any error ) {
+            return settle(
+                work,
+                claimed.token,
+                result( "retryable", "transport-guard-error" ),
+                retrySeconds
+            );
         }
         var outcome = "";
         try {
@@ -379,8 +404,32 @@ component singleton {
      * Recovers expired leases without automatically retrying uncertain acceptance.
      * @returns numeric
      */
-    public numeric function recoverExpired( numeric limit = 100, date clock = now() ) {
+    public numeric function recoverExpired( numeric limit = 100, date clock = now(), any constraints ) {
         return variables.deliveryStore.recoverExpired( argumentCollection = arguments );
+    }
+
+    /**
+     * Reconciles ambiguous work against authoritative local evidence that no attempt was accepted.
+     * @returns boolean
+     */
+    public boolean function reconcileNotAccepted(
+        required string id,
+        required function rejection,
+        date retryDate = now(),
+        date clock = now()
+    ) {
+        transaction {
+            var work = getDelivery( arguments.id, true );
+            if ( isNull( work ) || work.getState() != "ambiguous" ) {
+                return false;
+            }
+            return variables.deliveryStore.reconcileRejection(
+                arguments.id,
+                arguments.rejection( work ),
+                arguments.retryDate,
+                arguments.clock
+            );
+        }
     }
     /**
      * Deletes a bounded batch of eligible old transport attempts.
