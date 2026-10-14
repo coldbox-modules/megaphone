@@ -55,6 +55,11 @@ component extends="testbox.system.BaseSpec" {
                 expect( () => variables.calendar.configureTask( variables.task, "start" ) ).toThrow( "Megaphone.Digests.InvalidSchedule" );
                 expect( () => variables.calendar.configureTask( variables.task, "weekly" ) ).toThrow( "Megaphone.Digests.InvalidSchedule" );
             } );
+            it( "preserves UTC epoch milliseconds from a saved occurrence", () => {
+                var occurrence = createObject( "java", "java.util.Date" ).init( javacast( "long", 1735732800123 ) );
+                expect( variables.calendar.epoch( occurrence ) ).toBe( 1735732800123 );
+                expect( variables.calendar.epoch( dateAdd( "s", 1, occurrence ) ) ).toBe( 1735732801123 );
+            } );
         } );
     }
 

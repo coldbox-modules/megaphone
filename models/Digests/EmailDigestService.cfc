@@ -102,8 +102,8 @@ component singleton {
             }
             var definition = getDefinition( arguments.digestName );
             var timing = structKeyExists( arguments.schedule, "definition" ) ? definition.schedule : arguments.schedule;
-            var digestName = definition.name;
-            var schedule = arguments.schedule;
+            var configuredDigestName = definition.name;
+            var configuredSchedule = arguments.schedule;
             var zone = arguments.timezone;
             var task = variables.scheduler.task( name ).setTimezone( zone );
             try {
@@ -112,7 +112,14 @@ component singleton {
                     .call( () => {
                         var cutoff = variables.calendar.cutoff( task );
                         // Drain all recipients for this one scheduled boundary in bounded transactions.
-                        while ( !prepareDigest( digestName, cutoff, zone, schedule ).isEmpty() ) {
+                        while (
+                            !prepareDigest(
+                                configuredDigestName,
+                                cutoff,
+                                zone,
+                                configuredSchedule
+                            ).isEmpty()
+                        ) {
                         }
                         dispatchDue();
                     } );
@@ -465,15 +472,15 @@ component singleton {
             return [];
         }
         var recipient = arguments.notifiable;
-        var definition = arguments.definition;
-        var eligible = arguments.candidates.filter( ( item ) => policy.isEligible( recipient, definition, item ) );
-        if ( !structKeyExists( definition, "selectItems" ) ) {
+        var configuredDefinition = arguments.definition;
+        var eligible = arguments.candidates.filter( ( item ) => policy.isEligible( recipient, configuredDefinition, item ) );
+        if ( !structKeyExists( configuredDefinition, "selectItems" ) ) {
             return eligible;
         }
-        var selector = definition.selectItems;
-        var selected = isCustomFunction( selector ) ? selector( recipient, definition, duplicate( eligible ) ) : resolveCollaborator(
+        var selector = configuredDefinition.selectItems;
+        var selected = isCustomFunction( selector ) ? selector( recipient, configuredDefinition, duplicate( eligible ) ) : resolveCollaborator(
             selector
-        ).selectItems( recipient, definition, duplicate( eligible ) );
+        ).selectItems( recipient, configuredDefinition, duplicate( eligible ) );
         if ( !isArray( selected ) ) {
             throw(
                 type = "Megaphone.Digests.InvalidSelection",

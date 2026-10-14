@@ -193,9 +193,7 @@ component {
      * @returns numeric
      */
     public numeric function epoch( date clock = now() ) {
-        return createObject( "java", "java.time.Instant" )
-            .parse( dateTimeFormat( arguments.clock, "yyyy-mm-dd'T'HH:nn:ss.l'Z'", "UTC" ) )
-            .toEpochMilli();
+        return parseDateTime( arguments.clock ).getTime();
     }
 
     /**

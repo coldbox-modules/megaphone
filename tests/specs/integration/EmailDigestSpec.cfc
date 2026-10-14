@@ -318,6 +318,7 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                     notifiable = variables.owner,
                     digestName = "discovery",
                     mode = "digest",
+                    timezone = "America/Denver",
                     clock = dateAdd( "h", 4, variables.start )
                 );
                 expect( collect( "old" ).status ).toBe( "suppressed" );
