@@ -1,24 +1,4 @@
-# v1.0.5
-## 14 Oct 2026 — 00:22:34 UTC
-
-### other
-
-+ __\*:__ fix: load Web Push through Adobe application classpaths
- ([a5f7638](https://github.com/coldbox-modules/megaphone/commit/a5f763839c77729f0f973ef9c554e017efe593ad))
-+ __\*:__ fix: preserve nullable snapshots and queue backoff on Adobe
- ([ff74b71](https://github.com/coldbox-modules/megaphone/commit/ff74b71ce3799005b39ad70b5e8e252b0c8d0911))
-+ __\*:__ fix: support Adobe receipt scoping and SDK classpaths
- ([fe14bbc](https://github.com/coldbox-modules/megaphone/commit/fe14bbc8c3daf192a5e850bb7e95a0bb8cb7e13f))
-+ __\*:__ fix: invoke BoxLang shallow copying without engine-specific syntax
- ([0eb4cfc](https://github.com/coldbox-modules/megaphone/commit/0eb4cfcbf357cf4b5a60404c736302b052454db9))
-+ __\*:__ fix: defer BoxLang shallow-copy syntax until runtime
- ([4dc60c5](https://github.com/coldbox-modules/megaphone/commit/4dc60c576b7ddbef88acb807fc082e6a8c03f2f5))
-+ __\*:__ fix: keep BoxLang notification copying compilable on Adobe
- ([f73d4e2](https://github.com/coldbox-modules/megaphone/commit/f73d4e2ec54b351a27c1b42ba8b86423c6abccfb))
-+ __\*:__ feat: add durable notifications and recipient inbox APIs ([bb6638f](https://github.com/coldbox-modules/megaphone/commit/bb6638f8b467c8ce7847d37c7afcbd3664d7f741))
-
-
-# v1.1.0 (pending release)
+# v1.1.0
 
 ## Requirements
 
@@ -68,7 +48,13 @@ Installing the module doesn't import your existing history, preferences, or pend
 
 ## Validation
 
-Local API alignment checks passed: 206 module regressions on MySQL with four existing ColdBox 6 skips; 59 PostgreSQL checks; module migration rollback/reapplication; 212 focused CommuniArts checks across 41 bundles; and 1,143 Vitest checks. Clean installation, an upgrade with existing RC notification data, and repeated migrations were verified in disposable databases. Formatting and artifact inspection passed. Earlier candidate engine-matrix results do not validate this refactor. Hosted CI, browser matrices, real-provider/device checks, publication, and deployment remain deferred.
+Release CI passed all ten engine/framework combinations: Lucee 5/6 and Adobe ColdFusion 2021/2023 with ColdBox 6/7, plus native and CFML-compatible BoxLang with ColdBox 8. The matrix uses Java 11, 17, and 21 according to each engine's requirements. Existing local verification also covered PostgreSQL persistence, migration upgrades and repeat runs, saved-plan replay, optional cbq activation, formatting, and package contents.
+
+Real-provider/device checks and browser matrices remain separate from the module release.
+
+# v1.0.5
+
+This version was published by the release workflow with an incorrect patch version. Use 1.1.0 for the notification planning, queued delivery, and inbox APIs described above.
 
 # v1.0.4
 ## 19 Apr 2024 — 16:28:17 UTC
