@@ -28,7 +28,7 @@ jobs:
           import sys
 
           title = os.environ["PR_TITLE"]
-          if re.match(r"^feat(?:\(|!?[:])", title) and not re.match(r"^feat\([^)]+\):\s.+$", title):
+          if re.match(r"^feat(?:\(|!?[:])", title, re.IGNORECASE) and not re.match(r"^feat\([^)]+\):\s.+$", title, re.IGNORECASE):
               print("::error::The release parser requires a scoped feature title, such as feat(digests): add named email digests")
               sys.exit(1)
           PY
@@ -88,18 +88,18 @@ jobs:
 
       - name: Install BoxLang support
         if: startsWith(matrix.engine.cfengine, 'boxlang')
-        run: box install commandbox-boxlang
+        run: bash .github/scripts/box-install.sh commandbox-boxlang
 
       - name: Install dependencies
         run: |
-          box install
+          bash .github/scripts/box-install.sh
           box config set modules.commandbox-dotenv.checkEnvPreServerStart=false
-          box install ${{ matrix.coldbox }} --noSave
+          bash .github/scripts/box-install.sh ${{ matrix.coldbox }} --noSave
           if [[ "${{ matrix.engine.cfengine }}" == boxlang* ]]; then
-            box install testbox@6 --noSave
-            box install qb@14 --noSave
-            box install cbq@7 --noSave
-            box install hyper@8 --noSave
+            bash .github/scripts/box-install.sh testbox@6 --noSave
+            bash .github/scripts/box-install.sh qb@14 --noSave
+            bash .github/scripts/box-install.sh cbq@7 --noSave
+            bash .github/scripts/box-install.sh hyper@8 --noSave
           fi
 
       - name: Migrate database
@@ -110,7 +110,7 @@ jobs:
           DB_USER: megaphone
           DB_PASSWORD: megaphone
         run: |
-          box install commandbox-migrations
+          bash .github/scripts/box-install.sh commandbox-migrations
           box migrate install --verbose
           box migrate up --verbose
           box migrate install manager=cbq --verbose
@@ -175,7 +175,7 @@ jobs:
         uses: elpete/setup-commandbox@v1.0.0
 
       - name: Install CFFormat
-        run: box install commandbox-cfformat
+        run: bash .github/scripts/box-install.sh commandbox-cfformat
 
       - name: Run CFFormat
         run: box run-script format
