@@ -1,11 +1,3 @@
-# v1.1.1
-## 14 Oct 2026 — 20:06:04 UTC
-
-### other
-
-+ __\*:__ feat: add named email digests (#3) ([0eee0e4](https://github.com/coldbox-modules/megaphone/commit/0eee0e4bd36f08e396889dd3a0dd8990971215f1))
-
-
 # v1.2.0
 
 ## Added
@@ -27,6 +19,10 @@
 Configure definitions under `digests` and persistence under `storage.digests`. A definition supplies its schedule, policy, renderer, and receipt-aware email channel. Apply the additive digest migration on the same datasource as notification events and deliveries before collecting items.
 
 Existing synchronous Notifications and ordinary immediate email continue to use their configured channels. Subscription changes apply prospectively and do not replay old collected items. See [Named email digests](docs/email-digests.md) for integration examples.
+
+# v1.1.1 (superseded by v1.2.0)
+
+The named email digest feature was published under an incorrect patch version because the release parser did not recognize an unscoped feature title. Use v1.2.0 for this feature release.
 
 # v1.1.0
 

@@ -63,18 +63,18 @@ jobs:
 
       - name: Install BoxLang support
         if: startsWith(matrix.engine.cfengine, 'boxlang')
-        run: box install commandbox-boxlang
+        run: bash .github/scripts/box-install.sh commandbox-boxlang
 
       - name: Install dependencies
         run: |
-          box install
+          bash .github/scripts/box-install.sh
           box config set modules.commandbox-dotenv.checkEnvPreServerStart=false
-          box install ${{ matrix.coldbox }} --noSave
+          bash .github/scripts/box-install.sh ${{ matrix.coldbox }} --noSave
           if [[ "${{ matrix.engine.cfengine }}" == boxlang* ]]; then
-            box install testbox@6 --noSave
-            box install qb@14 --noSave
-            box install cbq@7 --noSave
-            box install hyper@8 --noSave
+            bash .github/scripts/box-install.sh testbox@6 --noSave
+            bash .github/scripts/box-install.sh qb@14 --noSave
+            bash .github/scripts/box-install.sh cbq@7 --noSave
+            bash .github/scripts/box-install.sh hyper@8 --noSave
           fi
 
       - name: Migrate database
@@ -85,7 +85,7 @@ jobs:
           DB_USER: megaphone
           DB_PASSWORD: megaphone
         run: |
-          box install commandbox-migrations
+          bash .github/scripts/box-install.sh commandbox-migrations
           box migrate install --verbose
           box migrate up --verbose
           box migrate install manager=cbq --verbose
@@ -139,7 +139,7 @@ jobs:
 
       - name: Install and Configure Semantic Release
         run: |
-          box install commandbox-semantic-release
+          bash .github/scripts/box-install.sh commandbox-semantic-release
           box config set endpoints.forgebox.APIToken=${{ secrets.FORGEBOX_TOKEN }}
           box config set modules.commandbox-semantic-release.targetBranch=main
           box config set modules.commandbox-semantic-release.plugins='{ "VerifyConditions": "GitHubActionsConditionsVerifier@commandbox-semantic-release", "FetchLastRelease": "ForgeBoxReleaseFetcher@commandbox-semantic-release", "RetrieveCommits": "JGitCommitsRetriever@commandbox-semantic-release", "ParseCommit": "ConventionalChangelogParser@commandbox-semantic-release", "FilterCommits": "DefaultCommitFilterer@commandbox-semantic-release", "AnalyzeCommits": "DefaultCommitAnalyzer@commandbox-semantic-release", "VerifyRelease": "NullReleaseVerifier@commandbox-semantic-release", "GenerateNotes": "GitHubMarkdownNotesGenerator@commandbox-semantic-release", "UpdateChangelog": "FileAppendChangelogUpdater@commandbox-semantic-release", "CommitArtifacts": "NullArtifactsCommitter@commandbox-semantic-release", "PublishRelease": "ForgeBoxReleasePublisher@commandbox-semantic-release", "PublicizeRelease": "GitHubReleasePublicizer@commandbox-semantic-release" }'
