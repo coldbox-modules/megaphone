@@ -22,7 +22,14 @@ component extends="tests.specs.integration.EmailDigestSpec" {
             } );
             afterEach( () => cleanup() );
             it( "admits one item under simultaneous duplicate publication", () => {
-                var results = together( [ () => admit( "same" ), () => admit( "same" ) ] );
+                var results = together( [
+                    () => {
+                        return admit( "same" );
+                    },
+                    () => {
+                        return admit( "same" );
+                    }
+                ] );
                 expect( results[ 1 ].id ).toBe( results[ 2 ].id );
                 expect( results.filter( ( result ) => result.created ).len() ).toBe( 1 );
             } );
@@ -33,7 +40,14 @@ component extends="tests.specs.integration.EmailDigestSpec" {
                     mode = "immediate",
                     clock = variables.start
                 );
-                var results = together( [ () => admit( "same-immediate" ), () => admit( "same-immediate" ) ] );
+                var results = together( [
+                    () => {
+                        return admit( "same-immediate" );
+                    },
+                    () => {
+                        return admit( "same-immediate" );
+                    }
+                ] );
                 expect( results[ 1 ].deliveryId ).toBe( results[ 2 ].deliveryId );
                 expect( results.filter( ( result ) => result.created ).len() ).toBe( 1 );
                 together( [
@@ -44,7 +58,14 @@ component extends="tests.specs.integration.EmailDigestSpec" {
             } );
             it( "freezes one batch under simultaneous scheduler pickup", () => {
                 admit( "one" );
-                var results = together( [ () => freezeDue(), () => freezeDue() ] );
+                var results = together( [
+                    () => {
+                        return freezeDue();
+                    },
+                    () => {
+                        return freezeDue();
+                    }
+                ] );
                 expect( results[ 1 ].len() + results[ 2 ].len() ).toBe( 1 );
                 var batches = builder()
                     .from( "megaphone_digest_batches" )
@@ -67,8 +88,12 @@ component extends="tests.specs.integration.EmailDigestSpec" {
             it( "excludes a cutoff admission whichever worker acquires the subscription lock first", () => {
                 admit( "before" );
                 together( [
-                    () => freezeDue(),
-                    () => admit( "at", variables.subscription.lastCutoffAt + 7 * 24 * 60 * 60 * 1000 )
+                    () => {
+                        return freezeDue();
+                    },
+                    () => {
+                        return admit( "at", variables.subscription.lastCutoffAt + 7 * 24 * 60 * 60 * 1000 );
+                    }
                 ] );
                 var batches = builder()
                     .from( "megaphone_digest_batches" )
@@ -104,7 +129,6 @@ component extends="tests.specs.integration.EmailDigestSpec" {
     }
     private array function together( required array work ) {
         var names = [];
-        var outcomes = createObject( "java", "java.util.concurrent.ConcurrentHashMap" ).init();
         var ready = createObject( "java", "java.util.concurrent.CountDownLatch" ).init(
             javacast( "int", arguments.work.len() )
         );
@@ -113,25 +137,16 @@ component extends="tests.specs.integration.EmailDigestSpec" {
         for ( var task in arguments.work ) {
             var workerName = "digest" & replace( createUUID(), "-", "", "all" );
             names.append( workerName );
-            thread
-                name=workerName
-                action="run"
-                callback=task
-                ready=ready
-                start=start
-                seconds=seconds
-                outcomes=outcomes
-                workerName=workerName {
+            thread name=workerName action="run" callback=task ready=ready start=start seconds=seconds {
                 attributes.ready.countDown();
                 try {
                     if ( !attributes.start.await( javacast( "long", 10 ), attributes.seconds ) ) {
                         throw( message = "Worker start timed out." );
                     }
                     var callback = attributes.callback;
-                    var answer = callback();
-                    attributes.outcomes.put( attributes.workerName, { "result": answer } );
+                    thread.outcome = { "result": callback() };
                 } catch ( any error ) {
-                    attributes.outcomes.put( attributes.workerName, { "problem": error.message & " " & error.detail } );
+                    thread.outcome = { "problem": error.message & " " & error.detail };
                 }
             }
         }
@@ -142,7 +157,10 @@ component extends="tests.specs.integration.EmailDigestSpec" {
         var results = [];
         for ( var name in names ) {
             expect( cfthread[ name ].status ).toBe( "COMPLETED" );
-            var outcome = outcomes.get( name );
+            var outcome = cfthread[ name ].outcome;
+            if ( !structKeyExists( outcome, "result" ) ) {
+                throw( message = "Digest worker did not return a result: " & serializeJSON( outcome ) );
+            }
             expect( outcome.problem ?: "" ).toBe( "" );
             results.append( outcome.result );
         }

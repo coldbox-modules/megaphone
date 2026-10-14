@@ -446,9 +446,6 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                 var batch = freeze();
                 variables.mail.setOutcome( "throw" );
                 expect( variables.operations.dispatch( batch.deliveryId ).getStatus() ).toBe( "ambiguous" );
-                expect( () => variables.operations.reconcileNotAccepted( batch.deliveryId, ( work ) => {
-                    return { "accepted": false };
-                } ) ).toThrow( "Megaphone.Delivery.InvalidReceipt" );
                 expect(
                     variables.operations.reconcileNotAccepted( batch.deliveryId, ( work ) => {
                         return { "accepted": false, "providerReference": "verified-rejection" };
@@ -463,6 +460,15 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                         return { "accepted": false, "providerReference": "stale" };
                     } )
                 ).toBeFalse();
+            } );
+            it( "rejects reconciliation without an authoritative provider reference", () => {
+                collect( "one" );
+                var batch = freeze();
+                variables.mail.setOutcome( "throw" );
+                expect( variables.operations.dispatch( batch.deliveryId ).getStatus() ).toBe( "ambiguous" );
+                expect( () => variables.operations.reconcileNotAccepted( batch.deliveryId, ( work ) => {
+                    return { "accepted": false };
+                } ) ).toThrow( "Megaphone.Delivery.InvalidReceipt" );
             } );
             it( "keeps the scheduler scoped to digest deliveries", () => {
                 var past = dateAdd( "n", -5, now() );
@@ -540,7 +546,10 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
             it( "preserves custom selection order through rendering and retry", () => {
                 collect( "one" );
                 collect( "two" );
-                variables.config.digests.discovery.selectItems = ( notifiable, definition, items ) => items.reverse();
+                variables.config.digests.discovery.selectItems = ( notifiable, definition, items ) => [
+                    items[ 2 ],
+                    items[ 1 ]
+                ];
                 try {
                     var batch = freeze();
                     expect( variables.digestStore.items( batch.id ).map( ( item ) => item.itemKey ) ).toBe( [ "two", "one" ] );
