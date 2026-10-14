@@ -19,7 +19,7 @@ component accessors="true" {
      */
     public DeliveryRecoveryResult function configure( required struct data ) {
         for ( var key in arguments.data ) {
-            if ( !isNull( arguments.data[ key ] ) ) {
+            if ( structKeyExists( arguments.data, key ) && !isNull( arguments.data[ key ] ) ) {
                 variables[ key ] = key == "receipt" ? newNotificationRecoveryReceipt().configure(
                     arguments.data[ key ]
                 ) : arguments.data[ key ];

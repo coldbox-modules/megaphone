@@ -50,7 +50,7 @@ component extends="tests.specs.integration.NotificationQueueSpec" {
                 var point = classes
                     .forName( "java.security.interfaces.ECPublicKey" )
                     .getMethod( "getW", noTypes )
-                    .invoke( generator.generateKeyPair().getPublic(), javacast( "object[]", [] ) );
+                    .invoke( generator.generateKeyPair().getPublic(), noArguments );
                 variables.subscription = {
                     "endpoint": "https://push.example.test/subscription/test",
                     "keys": {

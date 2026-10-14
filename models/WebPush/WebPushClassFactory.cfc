@@ -25,6 +25,14 @@ component {
      * @returns any
      */
     public any function create( required string className ) {
+        if (
+            structKeyExists( server, "coldfusion" ) && !structKeyExists( server, "lucee" ) && !structKeyExists(
+                server,
+                "boxlang"
+            )
+        ) {
+            return createObject( "java", arguments.className );
+        }
         return createObject( "java", arguments.className, [ variables.jarPath ] );
     }
 

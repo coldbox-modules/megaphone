@@ -29,7 +29,7 @@ component accessors="true" {
         for (
             var key in listToArray( "id,deliveryId,requestKey,intentHash,actorId,actorLabel,priorState,priorAttemptCount,priorTransportCount,priorReason,priorProviderReference,additionalAttempts,createdDate" )
         ) {
-            if ( !isNull( arguments.data[ key ] ) ) {
+            if ( structKeyExists( arguments.data, key ) && !isNull( arguments.data[ key ] ) ) {
                 variables[ key ] = arguments.data[ key ];
             }
         }

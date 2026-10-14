@@ -504,6 +504,17 @@ Push channel properties may configure `enabled`, `origin`, `publicKey`, `private
 
 Megaphone declares the Web Push SDK as a pinned JAR dependency in `box.json`; CommandBox installs it with the module. The bundled transport requires Java 11+; there is no separate SDK installation step.
 
+On Adobe ColdFusion, add the installed SDK folder to your application's Java classpath in `Application.cfc`, alongside any existing `loadPaths`:
+
+```js
+this.javaSettings = {
+    "loadPaths": [ "./modules/megaphone/resources/java/webpush" ],
+    "loadColdFusionClassPath": true
+};
+```
+
+Adjust the path if your application installs modules elsewhere. Megaphone still verifies the SDK checksum before using it.
+
 The runtime verifies the pinned SDK checksum before loading. Enrollment and service-worker integration remain application responsibilities. Registration does not change preferences or publish activity. Disconnect devices on logout/account switch. Provider tests use fixture HTTP clients; verify real devices separately before deployment.
 
 ## Inbox cursors and read state

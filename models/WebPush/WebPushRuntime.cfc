@@ -74,10 +74,14 @@ component {
                 classes.forName( "java.lang.Class" ),
                 javacast( "int", 0 )
             );
+            var emptyArguments = createObject( "java", "java.lang.reflect.Array" ).newInstance(
+                classes.forName( "java.lang.Object" ),
+                javacast( "int", 0 )
+            );
             var point = classes
                 .forName( "java.security.interfaces.ECPublicKey" )
                 .getMethod( "getW", emptyTypes )
-                .invoke( publicKey, javacast( "object[]", [] ) );
+                .invoke( publicKey, emptyArguments );
             var bytes = binaryDecode(
                 "04" & right( repeatString( "0", 64 ) & point.getAffineX().toString( 16 ), 64 ) & right(
                     repeatString( "0", 64 ) & point.getAffineY().toString( 16 ),
