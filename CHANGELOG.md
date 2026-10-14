@@ -1,3 +1,23 @@
+# v1.0.5
+## 14 Oct 2026 — 00:22:34 UTC
+
+### other
+
++ __\*:__ fix: load Web Push through Adobe application classpaths
+ ([a5f7638](https://github.com/coldbox-modules/megaphone/commit/a5f763839c77729f0f973ef9c554e017efe593ad))
++ __\*:__ fix: preserve nullable snapshots and queue backoff on Adobe
+ ([ff74b71](https://github.com/coldbox-modules/megaphone/commit/ff74b71ce3799005b39ad70b5e8e252b0c8d0911))
++ __\*:__ fix: support Adobe receipt scoping and SDK classpaths
+ ([fe14bbc](https://github.com/coldbox-modules/megaphone/commit/fe14bbc8c3daf192a5e850bb7e95a0bb8cb7e13f))
++ __\*:__ fix: invoke BoxLang shallow copying without engine-specific syntax
+ ([0eb4cfc](https://github.com/coldbox-modules/megaphone/commit/0eb4cfcbf357cf4b5a60404c736302b052454db9))
++ __\*:__ fix: defer BoxLang shallow-copy syntax until runtime
+ ([4dc60c5](https://github.com/coldbox-modules/megaphone/commit/4dc60c576b7ddbef88acb807fc082e6a8c03f2f5))
++ __\*:__ fix: keep BoxLang notification copying compilable on Adobe
+ ([f73d4e2](https://github.com/coldbox-modules/megaphone/commit/f73d4e2ec54b351a27c1b42ba8b86423c6abccfb))
++ __\*:__ feat: add durable notifications and recipient inbox APIs ([bb6638f](https://github.com/coldbox-modules/megaphone/commit/bb6638f8b467c8ce7847d37c7afcbd3664d7f741))
+
+
 # v1.1.0 (pending release)
 
 ## Requirements
