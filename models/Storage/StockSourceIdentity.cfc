@@ -39,7 +39,7 @@ component {
             if ( variables.nativePathAvailable ) {
                 try {
                     if ( !structKeyExists( variables, "runnablePathMethod" ) ) {
-                        variables.runnableClass = createObject( "java", "java.lang.Class" ).forName( "ortus.boxlang.runtime.runnables.IClassRunnable" );
+                        variables.runnableClass = createObject( "java", "java.lang.Class" ).forName( "ortus.boxlang.runtime.runnables.IBoxRunnable" );
                         variables.runnablePathMethod = variables.runnableClass.getMethod(
                             "getRunnablePath",
                             javacast( "java.lang.Class[]", [] )
@@ -56,8 +56,34 @@ component {
                     variables.nativePathAvailable = false;
                 }
             }
+            if (
+                !structKeyExists( identity, "path" ) && structKeyExists( server, "lucee" ) && isCustomFunction(
+                    arguments.instance
+                )
+            ) {
+                try {
+                    if ( !structKeyExists( variables, "udfPageSourceMethod" ) ) {
+                        variables.udfClass = createObject( "java", "java.lang.Class" ).forName( "lucee.runtime.type.UDF" );
+                        variables.udfPageSourceMethod = variables.udfClass.getMethod(
+                            "getPageSource",
+                            javacast( "java.lang.Class[]", [] )
+                        );
+                    }
+                    if ( variables.udfClass.isInstance( arguments.instance ) ) {
+                        identity.path = variables.udfPageSourceMethod
+                            .invoke( arguments.instance, javacast( "java.lang.Object[]", [] ) )
+                            .getPhyscalFile()
+                            .getCanonicalPath();
+                    }
+                } catch ( any unavailableFunctionSource ) {
+                    // Unprovable callback ownership must retain the generic compiler.
+                }
+            }
             if ( !structKeyExists( identity, "path" ) ) {
-                identity.path = componentMetadata( arguments.instance ).path ?: "";
+                // Function annotations cannot prove declaring ownership on an unknown engine.
+                identity.path = isCustomFunction( arguments.instance ) ? "" : (
+                    componentMetadata( arguments.instance ).path ?: ""
+                );
             }
         }
         return identity.path;
@@ -160,7 +186,7 @@ component {
         return compareNoCase( metadata.name ?: "", "identityColumnFormatter" ) == 0 && compareNoCase(
             metadata.access ?: "",
             "private"
-        ) == 0;
+        ) == 0 && isStockComponent( formatter, "qb.models.Query.QueryBuilder" );
     }
 
 }

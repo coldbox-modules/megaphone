@@ -343,6 +343,47 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                     genericRows[ 2 ].payloadHash.value
                 );
             } );
+            it( "rejects a private same-name formatter without invoking it and preserves its real renamed SQL columns", () => {
+                var sources = new megaphone.models.Storage.StockSourceIdentity();
+                if ( variables.fast ) {
+                    expect( sources.hasIdentityColumnFormatter( referenceQuery() ) ).toBeTrue();
+                    expect(
+                        sources.hasIdentityColumnFormatter(
+                            new qbStockAlias.models.Query.QueryBuilder( grammar = variables.grammar )
+                        )
+                    ).toBeTrue();
+                }
+                var owner = new tests.resources.SpoofedIdentityFormatter();
+                var query = referenceQuery();
+                query.setColumnFormatter( owner.formatter() );
+                expect( getMetadata( query.getColumnFormatter() ).name ).toBe( "identityColumnFormatter" );
+                expect( getMetadata( query.getColumnFormatter() ).access ).toBe( "private" );
+                expect( sources.hasIdentityColumnFormatter( query ) ).toBeFalse();
+                expect( owner.getCalls() ).toBe( 0 );
+                var rows = referenceRows( 2 );
+                for ( var row in rows ) {
+                    row.sourcePayloadHash = row.payloadHash;
+                    structDelete( row, "payloadHash" );
+                }
+                var compiles = { "sizes": [] };
+                observeCompiler( query, compiles );
+                if ( variables.fast ) {
+                    var admitted = insertReferenceRows(
+                        new megaphone.models.Storage.BulkRecords(),
+                        query,
+                        rows,
+                        {}
+                    );
+                    expect( admitted.len() ).toBe( 2 );
+                    expect( compiles.sizes ).toBe( [ 2 ] );
+                } else {
+                    query.insertIgnore( values = rows );
+                }
+                expect( owner.getCalls() ).toBeGT( 0 );
+                for ( var row in rows ) {
+                    expect( variables.events.find( row.id.value ).payloadHash ).toBe( row.sourcePayloadHash.value );
+                }
+            } );
             it( "retains full public compilation for unsupported metadata, expressions and custom formatters", () => {
                 if ( !variables.fast ) {
                     var input = eventInput( createUUID() );
