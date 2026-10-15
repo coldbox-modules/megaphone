@@ -41,6 +41,14 @@ component extends="tests.resources.BulkNotificationSpecBase" {
             it( "uses the explicitly requested public QB14 PostgreSQL executor and keeps QB9 fallback", () => {
                 expect( variables.fast ).toBe( application.megaphoneRequireReturning ?: false );
             } );
+            it( "resolves expected files without constructing them or accepting missing sources", () => {
+                var sources = new megaphone.models.Storage.StockSourceIdentity();
+                expect(
+                    sources.isStockComponent( variables.events, "tests.resources.ExpectedSourceConstructionGuard" )
+                ).toBeFalse();
+                expect( sources.isStockComponent( variables.events, "tests.resources.DoesNotExistSource" ) ).toBeFalse();
+                expect( sources.isStockComponent( variables.events, "megaphone.models.Storage.EventStore" ) ).toBeTrue();
+            } );
             it( "recognizes the exact stock source through mapping aliases while retaining real admission", () => {
                 var bulk = new megaphone.models.Storage.BulkRecords();
                 var queryAlias = new qbStockAlias.models.Query.QueryBuilder( grammar = variables.grammar );

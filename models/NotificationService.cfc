@@ -824,13 +824,10 @@ component singleton accessors="true" {
     private any function batchSnapshotter( required struct state ) {
         if ( !structKeyExists( arguments.state, "shared" ) ) {
             arguments.state.instance = newSnapshotHasher();
-            arguments.state.shared = compareNoCase(
-                variables.wirebox
-                    .getBinder()
-                    .getMapping( "NotificationSnapshotHasher@megaphone" )
-                    .getScope(),
-                "singleton"
-            ) == 0 && new megaphone.models.Storage.BulkRecords().isStockComponent(
+            var mapping = variables.wirebox.getBinder().getMapping( "NotificationSnapshotHasher@megaphone" );
+            arguments.state.shared = compareNoCase( mapping.getScope(), "singleton" ) == 0 &&
+            compareNoCase( mapping.getType(), "cfc" ) == 0 &&
+            new megaphone.models.Storage.StockSourceIdentity().isStockComponent(
                 arguments.state.instance,
                 "megaphone.models.Delivery.NotificationSnapshotHasher"
             );

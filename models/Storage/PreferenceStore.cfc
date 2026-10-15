@@ -111,7 +111,7 @@ component accessors="true" {
                 positions.append( result.len() );
             }
         }
-        var records = new megaphone.models.Storage.BulkRecords().readPreferences(
+        var records = new megaphone.models.Storage.PreferenceRecords().read(
             store = this,
             queryFactory = () => newQueryBuilder(),
             identities = identities,
