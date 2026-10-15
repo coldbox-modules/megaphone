@@ -394,6 +394,55 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                 expect( variables.counter.sql.len() ).toBeGT( 0 );
                 expect( variables.events.find( reference.id ).payload.text ).toBe( "'quoted ?'" );
             } );
+            it( "preserves caller dates and replay audit history with one stock reference audit clock", () => {
+                var supplied = dateAdd( "l", 321, createDateTime( 2030, 3, 10, 9, 0, 0 ) );
+                var old = dateAdd( "d", -30, now() );
+                var input = eventInput( createUUID() );
+                input.createdDate = supplied;
+                input.preparation = { "references": true, "auditClock": old };
+                var event = variables.events.recordReferences( [ input ] )[ 1 ];
+                expect( dateDiff( "l", variables.events.find( event.id ).createdDate, supplied ) ).toBe( 0 );
+                expect( variables.events.recordReferences( [ input ] )[ 1 ].created ).toBeFalse();
+                var intents = [];
+                for ( var channel in [ "database", "email", "push" ] ) {
+                    var item = deliveryInput( event.id );
+                    item.channel = channel;
+                    item.availableDate = supplied;
+                    item.initialState = channel == "push" ? "suppressed" : "queued";
+                    item.preparation = { "references": true, "auditClock": old };
+                    intents.append( item );
+                }
+                var before = now();
+                var references = variables.deliveries.enqueueReferences( intents );
+                var after = now();
+                var rows = references.map( ( item ) => variables.deliveries.find( item.id ) );
+                for ( var row in rows ) {
+                    expect( dateDiff( "l", row.availableDate, supplied ) ).toBe( 0 );
+                    expect( dateCompare( row.createdDate, before ) >= 0 && dateCompare( row.createdDate, after ) <= 0 ).toBeTrue();
+                    if ( variables.fast ) {
+                        expect( dateDiff( "l", row.createdDate, rows[ 1 ].createdDate ) ).toBe( 0 );
+                        expect( dateDiff( "l", row.updatedDate, rows[ 1 ].createdDate ) ).toBe( 0 );
+                        if ( row.state == "suppressed" ) {
+                            expect( dateDiff( "l", row.settledDate, rows[ 1 ].createdDate ) ).toBe( 0 );
+                        }
+                    }
+                }
+                var replay = variables.deliveries.enqueueReferences( intents );
+                expect( replay.every( ( item ) => !item.created ) ).toBeTrue();
+                for ( var index = 1; index <= replay.len(); index++ ) {
+                    var stored = variables.deliveries.find( replay[ index ].id );
+                    expect( dateDiff( "l", stored.createdDate, rows[ index ].createdDate ) ).toBe( 0 );
+                    expect( dateDiff( "l", stored.updatedDate, rows[ index ].updatedDate ) ).toBe( 0 );
+                }
+                var full = duplicate( intents[ 1 ] );
+                full.recipientId = createUUID();
+                var fullWork = variables.deliveries.enqueueMany( [ full ] )[ 1 ];
+                expect( dateCompare( fullWork.createdDate, before ) >= 0 ).toBeTrue();
+                expect( dateDiff( "l", fullWork.availableDate, supplied ) ).toBe( 0 );
+                var conflict = duplicate( intents[ 1 ] );
+                conflict.routingHash = "different";
+                expect( () => variables.deliveries.enqueueReferences( [ conflict ] ) ).toThrow( "Megaphone.Delivery.IdentityConflict" );
+            } );
             it( "honors custom store overrides instead of bypassing their public batch methods", () => {
                 var eventsCounter = { "count": 0 };
                 var deliveryCounter = { "count": 0 };

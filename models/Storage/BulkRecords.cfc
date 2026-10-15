@@ -195,6 +195,10 @@ component {
             }
         }
         if ( !unresolved.isEmpty() ) {
+            if ( !arguments.stockTypes.isEmpty() ) {
+                // Only conflicted stock candidates need lookup bindings; fresh UUIDs already returned their rows.
+                unresolved = typedRows( unresolved, arguments.stockTypes );
+            }
             var existing = read(
                 arguments.queryFactory,
                 unresolved,

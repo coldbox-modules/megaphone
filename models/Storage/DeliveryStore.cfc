@@ -59,7 +59,11 @@ component accessors="true" {
     }
 
     private array function writeDeliveries( required array intents, boolean referencesOnly = false, any bulkRecords ) {
-        var prepared = arguments.intents.map( ( intent ) => prepareDelivery( argumentCollection = intent ) );
+        var preparation = { "references": arguments.referencesOnly };
+        if ( arguments.referencesOnly && !arguments.intents.isEmpty() ) {
+            preparation.auditClock = now();
+        }
+        var prepared = arguments.intents.map( ( intent ) => prepareDelivery( argumentCollection = intent, preparation = preparation ) );
         var result = [];
         if ( prepared.isEmpty() ) {
             return result;
@@ -177,7 +181,8 @@ component accessors="true" {
         required string routingHash,
         string deviceId = "",
         string initialState = "queued",
-        date availableDate = now()
+        date availableDate = now(),
+        struct preparation = {}
     ) {
         if (
             !len( trim( arguments.eventId ) ) || !len( trim( arguments.recipientType ) ) ||
@@ -197,8 +202,7 @@ component accessors="true" {
             "deviceId": arguments.deviceId
         };
         var values = duplicate( identity );
-        identity.deviceId = textBinding( identity.deviceId );
-        values.deviceId = identity.deviceId;
+        values.deviceId = textBinding( arguments.deviceId );
         values.append( {
             "id": uuid(),
             "routingHash": arguments.routingHash,
@@ -206,20 +210,27 @@ component accessors="true" {
             "state": arguments.initialState,
             "attemptCount": 0,
             "availableDate": arguments.availableDate,
-            "createdDate": now(),
-            "updatedDate": now(),
-            "settledDate": timestamp( arguments.initialState == "suppressed" ? now() : javacast( "null", "" ) )
+            "createdDate": arguments.preparation.auditClock ?: now(),
+            "updatedDate": arguments.preparation.auditClock ?: now(),
+            "settledDate": timestamp(
+                arguments.initialState == "suppressed" ? ( arguments.preparation.auditClock ?: now() ) : javacast(
+                    "null",
+                    ""
+                )
+            )
         } );
-        for (
-            var key in [
-                "eventId",
-                "recipientType",
-                "recipientId",
-                "channel",
-                "deviceId"
-            ]
-        ) {
-            identity[ key ] = textBinding( arguments[ key ] );
+        if ( !( arguments.preparation.references ?: false ) ) {
+            for (
+                var key in [
+                    "eventId",
+                    "recipientType",
+                    "recipientId",
+                    "channel",
+                    "deviceId"
+                ]
+            ) {
+                identity[ key ] = textBinding( arguments[ key ] );
+            }
         }
         return { "identity": identity, "values": values };
     }

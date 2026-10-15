@@ -53,7 +53,8 @@ component accessors="true" {
     }
 
     private array function writeEvents( required array events, boolean referencesOnly = false, any bulkRecords ) {
-        var prepared = arguments.events.map( ( event ) => prepareEvent( argumentCollection = event ) );
+        var preparation = { "references": arguments.referencesOnly };
+        var prepared = arguments.events.map( ( event ) => prepareEvent( argumentCollection = event, preparation = preparation ) );
         var result = [];
         if ( prepared.isEmpty() ) {
             return result;
@@ -136,7 +137,8 @@ component accessors="true" {
         required struct payload,
         required string payloadHash,
         date createdDate = now(),
-        string notificationMapping = ""
+        string notificationMapping = "",
+        struct preparation = {}
     ) {
         if (
             !len( trim( arguments.namespace ) ) || !len( trim( arguments.eventKey ) ) ||
@@ -166,24 +168,26 @@ component accessors="true" {
                 "cfsqltype": "varchar"
             }
         } );
-        identity[ "namespace" ] = {
-            "value": arguments.namespace,
-            "cfsqltype": "varchar",
-            "null": false,
-            "list": false
-        };
-        identity[ "eventKey" ] = {
-            "value": arguments.eventKey,
-            "cfsqltype": "varchar",
-            "null": false,
-            "list": false
-        };
-        identity[ "version" ] = {
-            "value": arguments.version,
-            "cfsqltype": "integer",
-            "null": false,
-            "list": false
-        };
+        if ( !( arguments.preparation.references ?: false ) ) {
+            identity[ "namespace" ] = {
+                "value": arguments.namespace,
+                "cfsqltype": "varchar",
+                "null": false,
+                "list": false
+            };
+            identity[ "eventKey" ] = {
+                "value": arguments.eventKey,
+                "cfsqltype": "varchar",
+                "null": false,
+                "list": false
+            };
+            identity[ "version" ] = {
+                "value": arguments.version,
+                "cfsqltype": "integer",
+                "null": false,
+                "list": false
+            };
+        }
         return { "identity": identity, "values": values };
     }
 
