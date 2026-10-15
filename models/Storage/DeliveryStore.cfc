@@ -134,6 +134,17 @@ component accessors="true" {
             "updatedDate": now(),
             "settledDate": timestamp( arguments.initialState == "suppressed" ? now() : javacast( "null", "" ) )
         } );
+        for (
+            var key in [
+                "eventId",
+                "recipientType",
+                "recipientId",
+                "channel",
+                "deviceId"
+            ]
+        ) {
+            identity[ key ] = textBinding( arguments[ key ] );
+        }
         return { "identity": identity, "values": values };
     }
 

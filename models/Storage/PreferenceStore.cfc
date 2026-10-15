@@ -105,8 +105,32 @@ component accessors="true" {
             }
             result.append( [] );
             if ( !inputRequest.scopeKeys.isEmpty() ) {
-                identity[ "notificationType" ] = inputRequest.notificationType;
-                identity[ "scopeKey" ] = inputRequest.scopeKeys;
+                identity[ "recipientType" ] = {
+                    "value": identity.recipientType,
+                    "cfsqltype": "varchar",
+                    "null": false,
+                    "list": false
+                };
+                identity[ "recipientId" ] = {
+                    "value": identity.recipientId,
+                    "cfsqltype": "varchar",
+                    "null": false,
+                    "list": false
+                };
+                identity[ "notificationType" ] = {
+                    "value": inputRequest.notificationType,
+                    "cfsqltype": "varchar",
+                    "null": false,
+                    "list": false
+                };
+                identity[ "scopeKey" ] = inputRequest.scopeKeys.map( ( key ) => {
+                    return {
+                        "value": key,
+                        "cfsqltype": "varchar",
+                        "null": false,
+                        "list": false
+                    };
+                } );
                 identities.append( identity );
                 positions.append( result.len() );
             }

@@ -110,6 +110,24 @@ component accessors="true" {
                 "cfsqltype": "varchar"
             }
         } );
+        identity[ "namespace" ] = {
+            "value": arguments.namespace,
+            "cfsqltype": "varchar",
+            "null": false,
+            "list": false
+        };
+        identity[ "eventKey" ] = {
+            "value": arguments.eventKey,
+            "cfsqltype": "varchar",
+            "null": false,
+            "list": false
+        };
+        identity[ "version" ] = {
+            "value": arguments.version,
+            "cfsqltype": "integer",
+            "null": false,
+            "list": false
+        };
         return { "identity": identity, "values": values };
     }
 
