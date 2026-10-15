@@ -111,7 +111,11 @@ component accessors="true" {
                 positions.append( result.len() );
             }
         }
-        var records = new megaphone.models.Storage.BulkRecords().read( () => newPreferenceQuery(), identities );
+        var records = new megaphone.models.Storage.BulkRecords().read(
+            () => newPreferenceQuery(),
+            identities,
+            getTableName()
+        );
         for ( var index = 1; index <= positions.len(); index++ ) {
             var lookup = {};
             for ( var row in records[ index ] ) {

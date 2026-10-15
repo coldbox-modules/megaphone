@@ -45,7 +45,11 @@ component accessors="true" {
                 for ( var offset = 1; offset <= prepared.len(); offset += size ) {
                     var batch = prepared.slice( offset, min( size, prepared.len() - offset + 1 ) );
                     newDeliveryQuery().insertIgnore( batch.map( ( entry ) => entry.values ) );
-                    var records = bulk.read( () => newDeliveryQuery(), batch.map( ( entry ) => entry.identity ) );
+                    var records = bulk.read(
+                        () => newDeliveryQuery(),
+                        batch.map( ( entry ) => entry.identity ),
+                        getTableName()
+                    );
                     for ( var index = 1; index <= batch.len(); index++ ) {
                         var stored = records[ index ][ 1 ];
                         if ( stored.routingHash != batch[ index ].values.routingHash ) {

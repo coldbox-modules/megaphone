@@ -110,21 +110,14 @@ component singleton accessors="true" {
             event.payload,
             { "namespace": event.namespace, "kind": "payload" }
         );
-        var plan = newNotificationPlan().configure(
-            event,
-            [],
-            arguments.options.admitAfter ?: javacast( "null", "" ),
-            queueOptions
-        );
         if ( !isNull( arguments.options.admitAfter ) && dateCompare( occurredAt, arguments.options.admitAfter ) < 0 ) {
             event.expired = true;
-            plan = newNotificationPlan().configure(
+            return newNotificationPlan().configure(
                 event,
                 [],
                 arguments.options.admitAfter,
                 queueOptions
             );
-            return plan;
         }
         var intents = [];
         var seen = {};

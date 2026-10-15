@@ -126,6 +126,51 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                 );
                 expect( left( plans[ 2 ].getDeliveries()[ 1 ].routingHash, 7 ) ).toBe( "custom-" );
             } );
+            it( "uses one configured compiler per chunk while preserving typed identity matches and duplicate ordinals", () => {
+                var key = "Mixed-case-'?-" & createUUID();
+                var event = variables.events.record(
+                    namespace = "bulk-compiler",
+                    eventKey = key,
+                    version = 1,
+                    type = "notice",
+                    payload = {},
+                    payloadHash = "frozen"
+                );
+                var identities = [];
+                for ( var index = 1; index <= 101; index++ ) {
+                    identities.append( { "namespace": "bulk-compiler", "eventKey": key, "version": { "value": 1, "cfsqltype": "integer" } } );
+                }
+                identities[ 51 ].eventKey = uCase( key );
+                var compilers = [];
+                var table = "megaphone_events AS configured_identity_source";
+                var rows = new megaphone.models.Storage.BulkRecords().read(
+                    queryFactory = () => {
+                        var compiler = variables.injector
+                            .getInstance( "QueryBuilder@qb" )
+                            .from( table )
+                            .mergeDefaultOptions( { "timeout": 15 } );
+                        compilers.append( compiler );
+                        return compiler;
+                    },
+                    identities = identities,
+                    tableName = table
+                );
+                expect( compilers.len() ).toBe( 2 );
+                expect( rows.len() ).toBe( 101 );
+                for ( var index = 1; index <= rows.len(); index++ ) {
+                    if ( index == 51 && variables.isPostgres ) {
+                        expect( rows[ index ] ).toBeEmpty();
+                    } else {
+                        expect( rows[ index ].len() ).toBe( 1 );
+                        expect( rows[ index ][ 1 ].id ).toBe( event.id );
+                    }
+                }
+                for ( var compiler in compilers ) {
+                    expect( compiler.getDefaultOptions().timeout ).toBe( 15 );
+                    expect( compiler.getQueryLog().len() ).toBe( 1 );
+                    expect( compiler.getQueryLog()[ 1 ].sql ).notToInclude( key );
+                }
+            } );
             it( "rolls back every event and delivery if bulk queue insertion fails", () => {
                 var failing = new tests.resources.BulkQueueFixture( true );
                 variables.config.queue.queueAdapter = failing;
