@@ -105,40 +105,18 @@ component accessors="true" {
             }
             result.append( [] );
             if ( !inputRequest.scopeKeys.isEmpty() ) {
-                identity[ "recipientType" ] = {
-                    "value": identity.recipientType,
-                    "cfsqltype": "varchar",
-                    "null": false,
-                    "list": false
-                };
-                identity[ "recipientId" ] = {
-                    "value": identity.recipientId,
-                    "cfsqltype": "varchar",
-                    "null": false,
-                    "list": false
-                };
-                identity[ "notificationType" ] = {
-                    "value": inputRequest.notificationType,
-                    "cfsqltype": "varchar",
-                    "null": false,
-                    "list": false
-                };
-                identity[ "scopeKey" ] = inputRequest.scopeKeys.map( ( key ) => {
-                    return {
-                        "value": key,
-                        "cfsqltype": "varchar",
-                        "null": false,
-                        "list": false
-                    };
-                } );
+                identity[ "notificationType" ] = inputRequest.notificationType;
+                identity[ "scopeKey" ] = inputRequest.scopeKeys;
                 identities.append( identity );
                 positions.append( result.len() );
             }
         }
-        var records = new megaphone.models.Storage.BulkRecords().read(
-            () => newPreferenceQuery(),
-            identities,
-            getTableName()
+        var records = new megaphone.models.Storage.BulkRecords().readPreferences(
+            store = this,
+            queryFactory = () => newQueryBuilder(),
+            identities = identities,
+            tableName = getTableName(),
+            queryOptions = getQueryOptions()
         );
         for ( var index = 1; index <= positions.len(); index++ ) {
             var lookup = {};

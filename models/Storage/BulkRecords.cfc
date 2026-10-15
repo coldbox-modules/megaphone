@@ -88,14 +88,187 @@ component {
         return result;
     }
 
+    /** Validated stock preference identities can use one bounded PostgreSQL JSON parameter per batch. */
+    public array function readPreferences(
+        required any store,
+        required any queryFactory,
+        required array identities,
+        required string tableName,
+        struct queryOptions = {}
+    ) {
+        if ( arguments.identities.isEmpty() ) {
+            return [];
+        }
+        var query = arguments.queryFactory();
+        if (
+            !isStockComponent( arguments.store, "megaphone.models.Storage.PreferenceStore" ) ||
+            !supportsReturning( query ) || !isStockComponent( query.getUtils(), "qb.models.Query.QueryUtils" ) ||
+            !hasIdentityColumnFormatter( query )
+        ) {
+            var typedIdentities = arguments.identities.map( ( identity ) => {
+                return {
+                    "recipientType": {
+                        "value": identity.recipientType,
+                        "cfsqltype": "varchar",
+                        "null": false,
+                        "list": false
+                    },
+                    "recipientId": {
+                        "value": identity.recipientId,
+                        "cfsqltype": "varchar",
+                        "null": false,
+                        "list": false
+                    },
+                    "notificationType": {
+                        "value": identity.notificationType,
+                        "cfsqltype": "varchar",
+                        "null": false,
+                        "list": false
+                    },
+                    "scopeKey": identity.scopeKey.map( ( key ) => {
+                        return {
+                            "value": key,
+                            "cfsqltype": "varchar",
+                            "null": false,
+                            "list": false
+                        };
+                    } )
+                };
+            } );
+            var first = true;
+            return read(
+                () => {
+                    var next = first ? query : queryFactory();
+                    first = false;
+                    return next.from( tableName ).mergeDefaultOptions( queryOptions );
+                },
+                typedIdentities,
+                arguments.tableName
+            );
+        }
+        var grammar = query.getGrammar();
+        if ( isCustomFunction( grammar.getResolvedGrammar ?: "" ) ) {
+            grammar = grammar.getResolvedGrammar();
+        }
+        var result = [];
+        var offset = 1;
+        while ( offset <= arguments.identities.len() ) {
+            var rows = [];
+            var characters = 2;
+            while ( offset + rows.len() <= arguments.identities.len() && rows.len() < 1000 ) {
+                var identity = arguments.identities[ offset + rows.len() ];
+                var encoded = serializeJSON( {
+                    "ordinal": rows.len() + 1,
+                    "c1": toString( identity.recipientType ),
+                    "c2": toString( identity.recipientId ),
+                    "c3": toString( identity.notificationType ),
+                    "c4": identity.scopeKey
+                } );
+                // A single unusually large scope list retains the original parameterized implementation.
+                if ( len( encoded ) > 1048576 && !rows.isEmpty() ) {
+                    break;
+                }
+                if ( len( encoded ) > 1048576 ) {
+                    var remaining = arguments.identities.slice( offset );
+                    var fallback = readPreferencesFallback(
+                        arguments.queryFactory,
+                        remaining,
+                        arguments.tableName,
+                        arguments.queryOptions
+                    );
+                    result.append( fallback, true );
+                    return result;
+                }
+                if ( !rows.isEmpty() && characters + len( encoded ) + 1 > 1048576 ) {
+                    break;
+                }
+                rows.append( encoded );
+                characters += len( encoded ) + 1;
+                result.append( [] );
+            }
+            query.reset().mergeDefaultOptions( arguments.queryOptions );
+            var column = ( name ) => grammar.wrapColumn( query.mapToColumnType( name ) );
+            query.fromRaw(
+                "JSONB_TO_RECORDSET(CAST(? AS JSONB)) AS " & column( "megaphone_preference_batch" ) &
+                "(" & column( "ordinal" ) & " INTEGER, " & column( "c1" ) & " TEXT, " & column( "c2" ) &
+                " TEXT, " & column( "c3" ) & " TEXT, " & column( "c4" ) & " TEXT[])",
+                [
+                    {
+                        "value": "[" & rows.toList( "," ) & "]",
+                        "cfsqltype": "varchar",
+                        "null": false,
+                        "list": false
+                    }
+                ]
+            );
+            query.crossJoin( arguments.tableName & " AS megaphone_preference_row" );
+            query
+                .select( "megaphone_preference_row.*" )
+                .addSelect( "megaphone_preference_batch.ordinal AS megaphoneBulkOrdinal" );
+            query.whereColumn( "megaphone_preference_row.recipientType", "=", "megaphone_preference_batch.c1" );
+            query.whereColumn( "megaphone_preference_row.recipientId", "=", "megaphone_preference_batch.c2" );
+            query.whereColumn( "megaphone_preference_row.notificationType", "=", "megaphone_preference_batch.c3" );
+            query.whereRaw(
+                column( "megaphone_preference_row.scopeKey" ) & " = ANY(" & column( "megaphone_preference_batch.c4" ) & ")"
+            );
+            for ( var row in query.get() ) {
+                var ordinal = val( row.megaphoneBulkOrdinal );
+                structDelete( row, "megaphoneBulkOrdinal" );
+                result[ offset + ordinal - 1 ].append( row );
+            }
+            offset += rows.len();
+        }
+        return result;
+    }
+
+    private array function readPreferencesFallback(
+        required any queryFactory,
+        required array identities,
+        required string tableName,
+        required struct queryOptions
+    ) {
+        var typed = arguments.identities.map( ( identity ) => {
+            return {
+                "recipientType": {
+                    "value": identity.recipientType,
+                    "cfsqltype": "varchar",
+                    "null": false,
+                    "list": false
+                },
+                "recipientId": {
+                    "value": identity.recipientId,
+                    "cfsqltype": "varchar",
+                    "null": false,
+                    "list": false
+                },
+                "notificationType": {
+                    "value": identity.notificationType,
+                    "cfsqltype": "varchar",
+                    "null": false,
+                    "list": false
+                },
+                "scopeKey": identity.scopeKey.map( ( key ) => {
+                    return {
+                        "value": key,
+                        "cfsqltype": "varchar",
+                        "null": false,
+                        "list": false
+                    };
+                } )
+            };
+        } );
+        return read(
+            () => queryFactory().from( tableName ).mergeDefaultOptions( queryOptions ),
+            typed,
+            arguments.tableName
+        );
+    }
+
     /** A mapping alias may rename the same stock component; subclasses still have different source files. */
     public boolean function isStockComponent( required any instance, required string mapping ) {
         var identity = sourceIdentity( arguments.instance );
         if ( !structKeyExists( identity, arguments.mapping ) ) {
-            identity[ arguments.mapping ] = isStockMetadata(
-                componentMetadata( arguments.instance ),
-                arguments.mapping
-            );
+            identity[ arguments.mapping ] = isStockSource( arguments.instance, arguments.mapping );
         }
         return identity[ arguments.mapping ];
     }
@@ -115,21 +288,53 @@ component {
         return identity.metadata;
     }
 
-    private boolean function isStockMetadata( required struct metadata, required string mapping ) {
-        if ( !len( arguments.metadata.path ?: "" ) ) {
+    /** Native BoxLang exposes the same source path without allocating full component metadata. */
+    private string function componentSourcePath( required any instance ) {
+        var identity = sourceIdentity( arguments.instance );
+        if ( !structKeyExists( identity, "path" ) ) {
+            if ( !structKeyExists( variables, "nativePathAvailable" ) ) {
+                variables.nativePathAvailable = structKeyExists( server, "boxlang" );
+            }
+            if ( variables.nativePathAvailable ) {
+                try {
+                    if ( !structKeyExists( variables, "runnablePathMethod" ) ) {
+                        variables.runnableClass = createObject( "java", "java.lang.Class" ).forName( "ortus.boxlang.runtime.runnables.IClassRunnable" );
+                        variables.runnablePathMethod = variables.runnableClass.getMethod(
+                            "getRunnablePath",
+                            javacast( "java.lang.Class[]", [] )
+                        );
+                    }
+                    if ( variables.runnableClass.isInstance( arguments.instance ) ) {
+                        identity.path = variables.runnablePathMethod
+                            .invoke( arguments.instance, javacast( "java.lang.Object[]", [] ) )
+                            .absolutePath()
+                            .toString();
+                    }
+                } catch ( any unavailableNativePath ) {
+                    // Older kernels and different classloaders retain the portable metadata boundary.
+                    variables.nativePathAvailable = false;
+                }
+            }
+            if ( !structKeyExists( identity, "path" ) ) {
+                identity.path = componentMetadata( arguments.instance ).path ?: "";
+            }
+        }
+        return identity.path;
+    }
+
+    private boolean function isStockSource( required any instance, required string mapping ) {
+        var path = componentSourcePath( arguments.instance );
+        if ( !len( path ) ) {
             return false;
         }
         if ( !structKeyExists( variables.expectedSourcePaths, arguments.mapping ) ) {
-            var expected = getMetadata( createObject( "component", arguments.mapping ) );
-            if ( !len( expected.path ?: "" ) ) {
+            var expectedPath = componentSourcePath( createObject( "component", arguments.mapping ) );
+            if ( !len( expectedPath ) ) {
                 return false;
             }
-            variables.expectedSourcePaths[ arguments.mapping ] = canonicalSourcePath( expected.path );
+            variables.expectedSourcePaths[ arguments.mapping ] = canonicalSourcePath( expectedPath );
         }
-        return compare(
-            canonicalSourcePath( arguments.metadata.path ),
-            variables.expectedSourcePaths[ arguments.mapping ]
-        ) == 0;
+        return compare( canonicalSourcePath( path ), variables.expectedSourcePaths[ arguments.mapping ] ) == 0;
     }
 
     private string function canonicalSourcePath( required string path ) {
@@ -143,8 +348,7 @@ component {
 
     /** Only qb's public executor with the unmodified PostgreSQL compiler supports this opt-in path. */
     public boolean function supportsReturning( required any query ) {
-        var metadata = componentMetadata( arguments.query );
-        if ( !isStockMetadata( metadata, "qb.models.Query.QueryBuilder" ) ) {
+        if ( !isStockComponent( arguments.query, "qb.models.Query.QueryBuilder" ) ) {
             return false;
         }
         var grammar = arguments.query.getGrammar();
@@ -154,18 +358,15 @@ component {
         if ( !isStockComponent( grammar, "qb.models.Grammars.PostgresGrammar" ) ) {
             return false;
         }
-        while ( isStruct( metadata ) ) {
-            for ( var method in metadata.functions ?: [] ) {
-                if ( compareNoCase( method.name, "runQuery" ) == 0 ) {
-                    return compareNoCase( method.access ?: "", "public" ) == 0;
-                }
-            }
-            if ( !isStruct( metadata.extends ?: "" ) ) {
-                break;
-            }
-            metadata = metadata.extends;
+        try {
+            return isCustomFunction( arguments.query.runQuery ) && compareNoCase(
+                getMetadata( arguments.query.runQuery ).access ?: "",
+                "public"
+            ) == 0;
+        } catch ( any inaccessibleExecutor ) {
+            // qb 9's executor is private; preserve its existing generic store path.
+            return false;
         }
-        return false;
     }
 
     /** Public typed-cell callers retain complete per-row validation. */

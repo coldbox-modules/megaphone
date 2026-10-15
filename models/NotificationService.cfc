@@ -64,7 +64,8 @@ component singleton accessors="true" {
         struct options = {},
         string connection,
         string queue,
-        boolean deferHashes = false
+        boolean deferHashes = false,
+        any captureSnapshotter
     ) {
         var captured = captureArguments( argumentCollection = arguments );
         return newNotificationPlan().configure( argumentCollection = captured );
@@ -77,7 +78,8 @@ component singleton accessors="true" {
         struct options = {},
         string connection,
         string queue,
-        boolean deferHashes = false
+        boolean deferHashes = false,
+        any captureSnapshotter
     ) {
         var queueOptions = {};
         for ( var name in [ "connection", "queue" ] ) {
@@ -86,7 +88,7 @@ component singleton accessors="true" {
             }
         }
         var runtime = arguments.deferHashes ? {} : newNotificationRuntime();
-        var snapshotter = newSnapshotHasher();
+        var snapshotter = isNull( arguments.captureSnapshotter ) ? newSnapshotHasher() : arguments.captureSnapshotter;
         if ( isSimpleValue( arguments.notification ) ) {
             arguments.notification = variables.wirebox.getInstance( arguments.notification );
         }
@@ -222,9 +224,11 @@ component singleton accessors="true" {
         var plans = [];
         var captures = [];
         var hashes = [];
+        var snapshotters = {};
         for ( var inputRequest in arguments.requests ) {
             var options = structCopy( inputRequest );
             options.deferHashes = true;
+            options.captureSnapshotter = batchSnapshotter( snapshotters );
             var plan = capturePlan( argumentCollection = options );
             var captured = plan.getMemento();
             plans.append( plan );
@@ -274,9 +278,11 @@ component singleton accessors="true" {
         var fallback = isNull( adapter ) || !isCustomFunction( adapter.enqueueReferencesMany ?: "" ) ||
         ( structKeyExists( settings, "digests" ) && !structIsEmpty( settings.digests ) );
         var captures = [];
+        var snapshotters = {};
         for ( var inputRequest in arguments.requests ) {
             var captureOptions = structCopy( inputRequest );
             captureOptions.deferHashes = true;
+            captureOptions.captureSnapshotter = batchSnapshotter( snapshotters );
             var captured = captureArguments( argumentCollection = captureOptions );
             for ( var intent in captured.deliveries ) {
                 fallback = fallback || ( intent.collection ?: false ) || structKeyExists(
@@ -814,6 +820,25 @@ component singleton accessors="true" {
      * Supplies the default deterministic snapshot hasher through WireBox.
      * @returns any
      */
+    /** Only the unmodified singleton snapshotter can be shared within a single batch capture. */
+    private any function batchSnapshotter( required struct state ) {
+        if ( !structKeyExists( arguments.state, "shared" ) ) {
+            arguments.state.instance = newSnapshotHasher();
+            arguments.state.shared = compareNoCase(
+                variables.wirebox
+                    .getBinder()
+                    .getMapping( "NotificationSnapshotHasher@megaphone" )
+                    .getScope(),
+                "singleton"
+            ) == 0 && new megaphone.models.Storage.BulkRecords().isStockComponent(
+                arguments.state.instance,
+                "megaphone.models.Delivery.NotificationSnapshotHasher"
+            );
+            return arguments.state.instance;
+        }
+        return arguments.state.shared ? arguments.state.instance : newSnapshotHasher();
+    }
+
     private any function newSnapshotHasher() provider="NotificationSnapshotHasher@megaphone" {
     }
     /**

@@ -45,6 +45,37 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                 expect( variables.adapter.getReferences().len() ).toBe( 202 );
                 expect( variables.deliveries.forEvent( first.eventId ).len() ).toBe( 3 );
             } );
+            it( "retains per-request transient snapshotter resolution in both batch APIs", () => {
+                var counter = { "instances": [] };
+                variables.injector
+                    .getScope( "singleton" )
+                    .getSingletons()
+                    .remove( "notificationsnapshothasher@megaphone" );
+                variables.injector
+                    .getBinder()
+                    .map( "NotificationSnapshotHasher@megaphone" )
+                    .to( "tests.resources.TransientSnapshotHasher" )
+                    .initArg( name = "counter", value = counter )
+                    .into( "NOSCOPE" );
+                try {
+                    variables.service.admitRequests( [ notificationRequest( createUUID() ), notificationRequest( createUUID() ) ] );
+                    expect( counter.instances.len() ).toBe( 8 );
+                    expect( counter.instances[ 1 ] ).toBe( counter.instances[ 4 ] );
+                    expect( counter.instances[ 5 ] ).toBe( counter.instances[ 8 ] );
+                    expect( counter.instances[ 1 ] ).notToBe( counter.instances[ 5 ] );
+                    counter.instances.clear();
+                    var plans = variables.service.planMany( [ notificationRequest( createUUID() ), notificationRequest( createUUID() ) ] );
+                    expect( plans.len() ).toBe( 2 );
+                    expect( counter.instances.len() ).toBe( 8 );
+                    expect( counter.instances[ 1 ] ).notToBe( counter.instances[ 5 ] );
+                } finally {
+                    variables.injector
+                        .getBinder()
+                        .map( "NotificationSnapshotHasher@megaphone" )
+                        .to( "megaphone.models.Delivery.NotificationSnapshotHasher" )
+                        .asSingleton();
+                }
+            } );
             it( "retains transaction rollback on late identity conflict and adapter failure", () => {
                 var existing = notificationRequest( createUUID() );
                 variables.service.admitRequests( [ existing ] );
