@@ -162,6 +162,28 @@ component {
         }
     }
 
+    /** Storage columns have known SQL types; leave raw preparation/replay values unchanged. */
+    public array function typedRows( required array rows, required struct types ) {
+        var result = [];
+        for ( var row in arguments.rows ) {
+            var values = {};
+            for ( var key in row ) {
+                if ( isStruct( row[ key ] ) || !structKeyExists( arguments.types, key ) ) {
+                    values[ key ] = row[ key ];
+                } else {
+                    values[ key ] = {
+                        "value": row[ key ],
+                        "cfsqltype": arguments.types[ key ],
+                        "null": false,
+                        "list": false
+                    };
+                }
+            }
+            result.append( values );
+        }
+        return result;
+    }
+
     /** Keep wide inserts below conservative driver bind limits as well as 100 rows. */
     public numeric function insertSize( required struct row ) {
         return max( 1, min( 100, int( 900 / structCount( arguments.row ) ) ) );

@@ -66,13 +66,26 @@ component singleton accessors="true" {
         string queue,
         boolean deferHashes = false
     ) {
+        var captured = captureArguments( argumentCollection = arguments );
+        return newNotificationPlan().configure( argumentCollection = captured );
+    }
+
+    private struct function captureArguments(
+        required any notifiables,
+        required any notification,
+        struct properties = {},
+        struct options = {},
+        string connection,
+        string queue,
+        boolean deferHashes = false
+    ) {
         var queueOptions = {};
         for ( var name in [ "connection", "queue" ] ) {
             if ( !isNull( arguments[ name ] ) ) {
                 queueOptions[ name ] = arguments[ name ];
             }
         }
-        var runtime = newNotificationRuntime();
+        var runtime = arguments.deferHashes ? {} : newNotificationRuntime();
         var snapshotter = newSnapshotHasher();
         if ( isSimpleValue( arguments.notification ) ) {
             arguments.notification = variables.wirebox.getInstance( arguments.notification );
@@ -112,12 +125,12 @@ component singleton accessors="true" {
         );
         if ( !isNull( arguments.options.admitAfter ) && dateCompare( occurredAt, arguments.options.admitAfter ) < 0 ) {
             event.expired = true;
-            return newNotificationPlan().configure(
-                event,
-                [],
-                arguments.options.admitAfter,
-                queueOptions
-            );
+            return {
+                "event": event,
+                "deliveries": [],
+                "admitAfter": arguments.options.admitAfter,
+                "queueOptions": queueOptions
+            };
         }
         var intents = [];
         var seen = {};
@@ -197,12 +210,11 @@ component singleton accessors="true" {
                 }
             }
         }
-        return newNotificationPlan().configure(
-            event,
-            intents,
-            arguments.options.admitAfter ?: javacast( "null", "" ),
-            queueOptions
-        );
+        var captured = { "event": event, "deliveries": intents, "queueOptions": queueOptions };
+        if ( !isNull( arguments.options.admitAfter ) ) {
+            captured.admitAfter = arguments.options.admitAfter;
+        }
+        return captured;
     }
 
     /** Captures ordinary plan() requests and hashes their snapshots together in input order. */
@@ -246,6 +258,83 @@ component singleton accessors="true" {
         return plans;
     }
 
+    /** Captures and admits requests without constructing plans when only queue references are needed. */
+    public void function admitRequests(
+        required array requests,
+        boolean alreadyAdmitted = false,
+        string connection,
+        string queue
+    ) {
+        if ( arguments.requests.isEmpty() ) {
+            return;
+        }
+        var runtime = newNotificationRuntime();
+        var settings = runtime.getSettings();
+        var adapter = runtime.resolve( "queueAdapter" );
+        var fallback = isNull( adapter ) || !isCustomFunction( adapter.enqueueReferencesMany ?: "" ) ||
+        ( structKeyExists( settings, "digests" ) && !structIsEmpty( settings.digests ) );
+        var captures = [];
+        for ( var inputRequest in arguments.requests ) {
+            var captureOptions = structCopy( inputRequest );
+            captureOptions.deferHashes = true;
+            var captured = captureArguments( argumentCollection = captureOptions );
+            for ( var intent in captured.deliveries ) {
+                fallback = fallback || ( intent.collection ?: false ) || structKeyExists(
+                    intent.routingData,
+                    "emailDigest"
+                );
+            }
+            captures.append( captured );
+        }
+        var plans = [];
+        if ( fallback ) {
+            // Custom plan configuration can transform snapshots before hashing; preserve that contract.
+            for ( var index = 1; index <= captures.len(); index++ ) {
+                var plan = newNotificationPlan().configure( argumentCollection = captures[ index ] );
+                plans.append( plan );
+                captures[ index ] = plan.getMemento();
+                captures[ index ].queueOptions = plan.getQueueOptions();
+            }
+        }
+        hashCaptures( captures );
+        var admissionArguments = structCopy( arguments );
+        structDelete( admissionArguments, "requests" );
+        if ( fallback ) {
+            for ( var index = 1; index <= plans.len(); index++ ) {
+                var planArguments = structCopy( captures[ index ] );
+                structDelete( planArguments, "schemaVersion" );
+                plans[ index ].configure( argumentCollection = planArguments );
+            }
+            admissionArguments.plans = plans;
+            queuePlans( argumentCollection = admissionArguments );
+            return;
+        }
+        admissionArguments.captures = captures;
+        admissionArguments.adapter = adapter;
+        admitCaptures( argumentCollection = admissionArguments );
+    }
+
+    private void function hashCaptures( required array captures ) {
+        var hashes = [];
+        for ( var captured in arguments.captures ) {
+            hashes.append( { "value": captured.event.payload, "context": { "namespace": captured.event.namespace, "kind": "payload" } } );
+            for ( var intent in captured.deliveries ) {
+                hashes.append( { "value": intent.routingData, "context": { "namespace": captured.event.namespace, "kind": "routing" } } );
+            }
+        }
+        if ( hashes.isEmpty() ) {
+            return;
+        }
+        var digests = newNotificationRuntime().digestMany( hashes );
+        var cursor = 1;
+        for ( var captured in arguments.captures ) {
+            captured.event.payloadHash = digests[ cursor++ ];
+            for ( var intent in captured.deliveries ) {
+                intent.routingHash = digests[ cursor++ ];
+            }
+        }
+    }
+
     /**
      * Admits saved plans without constructing result models when the adapter accepts references.
      * Existing model-based admission remains the fallback for legacy adapters and collections.
@@ -277,6 +366,23 @@ component singleton accessors="true" {
             queuePlans( argumentCollection = arguments );
             return;
         }
+        for ( var index = 1; index <= captures.len(); index++ ) {
+            captures[ index ].queueOptions = arguments.plans[ index ].getQueueOptions();
+        }
+        var admissionArguments = structCopy( arguments );
+        structDelete( admissionArguments, "plans" );
+        admissionArguments.captures = captures;
+        admissionArguments.adapter = adapter;
+        admitCaptures( argumentCollection = admissionArguments );
+    }
+
+    private void function admitCaptures(
+        required array captures,
+        required any adapter,
+        boolean alreadyAdmitted = false,
+        string connection,
+        string queue
+    ) {
         transaction {
             try {
                 var active = [];
@@ -302,7 +408,7 @@ component singleton accessors="true" {
                     if ( !events[ index ].created ) {
                         continue;
                     }
-                    var options = arguments.plans[ ordinals[ index ] ].getQueueOptions();
+                    var options = structCopy( captures[ ordinals[ index ] ].queueOptions ?: {} );
                     for ( var key in [ "connection", "queue" ] ) {
                         if ( !isNull( arguments[ key ] ) ) {
                             options[ key ] = arguments[ key ];

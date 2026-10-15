@@ -43,7 +43,22 @@ component accessors="true" {
             try {
                 for ( var offset = 1; offset <= prepared.len(); offset += size ) {
                     var batch = prepared.slice( offset, min( size, prepared.len() - offset + 1 ) );
-                    newEventQuery().insertIgnore( batch.map( ( entry ) => entry.values ) );
+                    newEventQuery().insertIgnore(
+                        bulk.typedRows(
+                            batch.map( ( entry ) => entry.values ),
+                            {
+                                "id": "varchar",
+                                "namespace": "varchar",
+                                "eventKey": "varchar",
+                                "version": "integer",
+                                "type": "varchar",
+                                "notificationMapping": "varchar",
+                                "payloadHash": "varchar",
+                                "payload": "varchar",
+                                "createdDate": "timestamp"
+                            }
+                        )
+                    );
                     var records = bulk.read(
                         () => newEventQuery(),
                         batch.map( ( entry ) => entry.identity ),

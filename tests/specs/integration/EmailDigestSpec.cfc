@@ -645,6 +645,28 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                 }
                 expect( variables.mail.getSent() ).toBeEmpty();
             } );
+            it( "admitRequests retains real digest collection and replay with a reference-capable adapter", () => {
+                var queue = new tests.resources.BulkReferenceQueueFixture();
+                variables.injector.getInstance( "NotificationRuntime@megaphone" ).setQueueAdapter( queue );
+                var input = {
+                    "notifiables": variables.owner,
+                    "notification": new tests.resources.DigestNotificationFixture(),
+                    "properties": item( "raw-bulk-collected" ),
+                    "options": { "eventKey": createUUID() }
+                };
+                variables.notifications.admitRequests( [ input ] );
+                var admitted = variables.notifications.plan( argumentCollection = input );
+                var first = variables.notifications.queuePlan( admitted );
+                variables.notifications.admitRequests( [ input ] );
+                var replay = variables.notifications.queuePlan( admitted );
+                expect( first.getCollections().len() ).toBe( 1 );
+                expect( first.getCollections()[ 1 ].status ).toBe( "collected" );
+                expect( replay.getCollections()[ 1 ].id ).toBe( first.getCollections()[ 1 ].id );
+                expect( replay.getCollections()[ 1 ].created ).toBeFalse();
+                expect( queue.getReferences() ).toBeEmpty();
+                expect( queue.getDeliveries() ).toBeEmpty();
+                expect( variables.mail.getSent() ).toBeEmpty();
+            } );
             it( "admitPlans retains collection admission and replay even with a reference-capable adapter", () => {
                 var queue = new tests.resources.BulkReferenceQueueFixture();
                 variables.injector.getInstance( "NotificationRuntime@megaphone" ).setQueueAdapter( queue );
