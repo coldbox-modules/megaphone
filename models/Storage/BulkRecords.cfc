@@ -83,16 +83,28 @@ component {
         return result;
     }
 
+    /** A mapping alias may rename the same stock component; subclasses still have different source files. */
+    public boolean function isStockComponent( required any instance, required string mapping ) {
+        var actual = getMetadata( arguments.instance );
+        var expected = getMetadata( createObject( "component", arguments.mapping ) );
+        if ( !len( actual.path ?: "" ) || !len( expected.path ?: "" ) ) {
+            return false;
+        }
+        var actualPath = createObject( "java", "java.io.File" ).init( actual.path ).getCanonicalPath();
+        var expectedPath = createObject( "java", "java.io.File" ).init( expected.path ).getCanonicalPath();
+        return compare( actualPath, expectedPath ) == 0;
+    }
+
     /** Only qb's public executor with the unmodified PostgreSQL compiler supports this opt-in path. */
     public boolean function supportsReturning( required any query ) {
-        if ( compareNoCase( getMetadata( arguments.query ).name, "qb.models.Query.QueryBuilder" ) != 0 ) {
+        if ( !isStockComponent( arguments.query, "qb.models.Query.QueryBuilder" ) ) {
             return false;
         }
         var grammar = arguments.query.getGrammar();
         if ( isCustomFunction( grammar.getResolvedGrammar ?: "" ) ) {
             grammar = grammar.getResolvedGrammar();
         }
-        if ( compareNoCase( getMetadata( grammar ).name, "qb.models.Grammars.PostgresGrammar" ) != 0 ) {
+        if ( !isStockComponent( grammar, "qb.models.Grammars.PostgresGrammar" ) ) {
             return false;
         }
         var metadata = getMetadata( arguments.query );

@@ -40,7 +40,7 @@ component accessors="true" {
     public array function enqueueReferences( required array intents ) {
         var bulk = new megaphone.models.Storage.BulkRecords();
         if (
-            compareNoCase( getMetadata( this ).name, "megaphone.models.Storage.DeliveryStore" ) != 0 || !bulk.supportsReturning(
+            !bulk.isStockComponent( this, "megaphone.models.Storage.DeliveryStore" ) || !bulk.supportsReturning(
                 newQueryBuilder()
             )
         ) {

@@ -41,6 +41,24 @@ component extends="tests.resources.BulkNotificationSpecBase" {
             it( "uses the explicitly requested public QB14 PostgreSQL executor and keeps QB9 fallback", () => {
                 expect( variables.fast ).toBe( application.megaphoneRequireReturning ?: false );
             } );
+            it( "recognizes the exact stock source through mapping aliases while retaining real admission", () => {
+                var bulk = new megaphone.models.Storage.BulkRecords();
+                var queryAlias = new qbStockAlias.models.Query.QueryBuilder( grammar = variables.grammar );
+                expect( getMetadata( queryAlias ).name ).notToBe(
+                    getMetadata( variables.injector.getInstance( "QueryBuilder@qb" ) ).name
+                );
+                expect( bulk.supportsReturning( queryAlias ) ).toBe( variables.fast );
+                var eventAlias = variables.injector.getInstance( "megaphoneStockAlias.models.Storage.EventStore" );
+                var deliveryAlias = variables.injector.getInstance( "megaphoneStockAlias.models.Storage.DeliveryStore" );
+                expect( bulk.isStockComponent( eventAlias, "megaphone.models.Storage.EventStore" ) ).toBeTrue();
+                expect( bulk.isStockComponent( deliveryAlias, "megaphone.models.Storage.DeliveryStore" ) ).toBeTrue();
+                var event = eventAlias.recordReferences( [ eventInput( createUUID() ) ] )[ 1 ];
+                var work = deliveryAlias.enqueueReferences( [ deliveryInput( event.id ) ] )[ 1 ];
+                expect( event.created ).toBeTrue();
+                expect( work.created ).toBeTrue();
+                expect( variables.counter.count == 0 ).toBe( variables.fast );
+                expect( deliveryAlias.find( work.id ).eventId ).toBe( event.id );
+            } );
             it( "returns minimal fresh references over a 1000-row boundary without identity readbacks on the fast path", () => {
                 var total = variables.fast ? 1001 : 101;
                 var inputs = [];

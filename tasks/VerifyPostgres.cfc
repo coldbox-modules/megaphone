@@ -27,6 +27,7 @@ component extends="commandbox-migrations.models.BaseMigrationCommand" {
         );
         var root = fileSystemUtil.resolvePath( "." );
         fileSystemUtil.createMapping( "/megaphone", root );
+        fileSystemUtil.createMapping( "/megaphoneStockAlias", root );
         fileSystemUtil.createMapping( "/tests", root & "/tests" );
         fileSystemUtil.createMapping( "/testbox", root & "/testbox" );
         fileSystemUtil.createMapping( "/coldbox", root & "/tests/resources/app/coldbox" );
@@ -54,6 +55,7 @@ component extends="commandbox-migrations.models.BaseMigrationCommand" {
             throw( message = "Use an installed qb module directory." );
         }
         fileSystemUtil.createMapping( "/qb", qbRoot );
+        fileSystemUtil.createMapping( "/qbStockAlias", qbRoot );
         fileSystemUtil.createMapping( "/cbpaginator", qbRoot & "/modules/cbpaginator" );
         application.megaphoneRequireReturning = arguments.requireReturning;
         fileSystemUtil.createMapping( "/str", root & "/modules/str" );

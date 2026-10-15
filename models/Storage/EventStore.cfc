@@ -39,7 +39,7 @@ component accessors="true" {
     public array function recordReferences( required array events ) {
         var bulk = new megaphone.models.Storage.BulkRecords();
         if (
-            compareNoCase( getMetadata( this ).name, "megaphone.models.Storage.EventStore" ) != 0 || !bulk.supportsReturning(
+            !bulk.isStockComponent( this, "megaphone.models.Storage.EventStore" ) || !bulk.supportsReturning(
                 newQueryBuilder()
             )
         ) {
