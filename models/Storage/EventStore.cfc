@@ -32,38 +32,72 @@ component accessors="true" {
 
     /** Records a batch in one caller transaction; identical replays never replace snapshots. */
     public array function recordMany( required array events ) {
+        return writeEvents( arguments.events );
+    }
+
+    /** Explicit no-result admission; custom stores and unsupported builders retain their public batch override. */
+    public array function recordReferences( required array events ) {
+        var bulk = new megaphone.models.Storage.BulkRecords();
+        if (
+            compareNoCase( getMetadata( this ).name, "megaphone.models.Storage.EventStore" ) != 0 || !bulk.supportsReturning(
+                newQueryBuilder()
+            )
+        ) {
+            return this
+                .recordMany( arguments.events )
+                .map( ( row ) => {
+                    return { "id": row.id, "created": row.created };
+                } );
+        }
+        return writeEvents( arguments.events, true );
+    }
+
+    private array function writeEvents( required array events, boolean referencesOnly = false ) {
         var prepared = arguments.events.map( ( event ) => prepareEvent( argumentCollection = event ) );
         var result = [];
         if ( prepared.isEmpty() ) {
             return result;
         }
         var bulk = new megaphone.models.Storage.BulkRecords();
-        var size = bulk.insertSize( prepared[ 1 ].values );
+        var size = arguments.referencesOnly ? max( 1, min( 1000, int( 30000 / structCount( prepared[ 1 ].values ) ) ) ) : bulk.insertSize(
+            prepared[ 1 ].values
+        );
         transaction {
             try {
                 for ( var offset = 1; offset <= prepared.len(); offset += size ) {
                     var batch = prepared.slice( offset, min( size, prepared.len() - offset + 1 ) );
-                    newEventQuery().insertIgnore(
-                        bulk.typedRows(
-                            batch.map( ( entry ) => entry.values ),
-                            {
-                                "id": "varchar",
-                                "namespace": "varchar",
-                                "eventKey": "varchar",
-                                "version": "integer",
-                                "type": "varchar",
-                                "notificationMapping": "varchar",
-                                "payloadHash": "varchar",
-                                "payload": "varchar",
-                                "createdDate": "timestamp"
-                            }
-                        )
+                    var insertValues = bulk.typedRows(
+                        batch.map( ( entry ) => entry.values ),
+                        {
+                            "id": "varchar",
+                            "namespace": "varchar",
+                            "eventKey": "varchar",
+                            "version": "integer",
+                            "type": "varchar",
+                            "notificationMapping": "varchar",
+                            "payloadHash": "varchar",
+                            "payload": "varchar",
+                            "createdDate": "timestamp"
+                        }
                     );
-                    var records = bulk.read(
-                        () => newEventQuery(),
-                        batch.map( ( entry ) => entry.identity ),
-                        getTableName()
-                    );
+                    var records = [];
+                    if ( arguments.referencesOnly ) {
+                        records = bulk.insertReferences(
+                            query = newEventQuery(),
+                            values = insertValues,
+                            identities = batch.map( ( entry ) => entry.identity ),
+                            columns = [ "id", "type", "payloadHash" ],
+                            queryFactory = () => newEventQuery(),
+                            tableName = getTableName()
+                        );
+                    } else {
+                        newEventQuery().insertIgnore( insertValues );
+                        records = bulk.read(
+                            () => newEventQuery(),
+                            batch.map( ( entry ) => entry.identity ),
+                            getTableName()
+                        );
+                    }
                     for ( var index = 1; index <= batch.len(); index++ ) {
                         var stored = records[ index ][ 1 ];
                         if (
@@ -74,9 +108,13 @@ component accessors="true" {
                                 message = "An event identity already refers to different content."
                             );
                         }
-                        stored.payload = deserializeJSON( stored.payload );
                         stored.created = stored.id == batch[ index ].values.id;
-                        result.append( stored );
+                        if ( arguments.referencesOnly ) {
+                            result.append( { "id": stored.id, "created": stored.created } );
+                        } else {
+                            stored.payload = deserializeJSON( stored.payload );
+                            result.append( stored );
+                        }
                     }
                 }
             } catch ( any error ) {

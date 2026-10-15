@@ -33,43 +33,87 @@ component accessors="true" {
 
     /** Batch admission never replaces an existing delivery or resets its lifecycle. */
     public array function enqueueMany( required array intents ) {
+        return writeDeliveries( arguments.intents );
+    }
+
+    /** Explicit no-result admission; custom stores and unsupported builders retain their public batch override. */
+    public array function enqueueReferences( required array intents ) {
+        var bulk = new megaphone.models.Storage.BulkRecords();
+        if (
+            compareNoCase( getMetadata( this ).name, "megaphone.models.Storage.DeliveryStore" ) != 0 || !bulk.supportsReturning(
+                newQueryBuilder()
+            )
+        ) {
+            return this
+                .enqueueMany( arguments.intents )
+                .map( ( row ) => {
+                    return {
+                        "id": row.id,
+                        "state": row.state,
+                        "availableDate": row.availableDate,
+                        "created": row.created
+                    };
+                } );
+        }
+        return writeDeliveries( arguments.intents, true );
+    }
+
+    private array function writeDeliveries( required array intents, boolean referencesOnly = false ) {
         var prepared = arguments.intents.map( ( intent ) => prepareDelivery( argumentCollection = intent ) );
         var result = [];
         if ( prepared.isEmpty() ) {
             return result;
         }
         var bulk = new megaphone.models.Storage.BulkRecords();
-        var size = bulk.insertSize( prepared[ 1 ].values );
+        var size = arguments.referencesOnly ? max( 1, min( 1000, int( 30000 / structCount( prepared[ 1 ].values ) ) ) ) : bulk.insertSize(
+            prepared[ 1 ].values
+        );
         transaction {
             try {
                 for ( var offset = 1; offset <= prepared.len(); offset += size ) {
                     var batch = prepared.slice( offset, min( size, prepared.len() - offset + 1 ) );
-                    newDeliveryQuery().insertIgnore(
-                        bulk.typedRows(
-                            batch.map( ( entry ) => entry.values ),
-                            {
-                                "id": "varchar",
-                                "eventId": "varchar",
-                                "recipientType": "varchar",
-                                "recipientId": "varchar",
-                                "channel": "varchar",
-                                "deviceId": "varchar",
-                                "routingHash": "varchar",
-                                "routingData": "varchar",
-                                "state": "varchar",
-                                "attemptCount": "integer",
-                                "availableDate": "timestamp",
-                                "createdDate": "timestamp",
-                                "updatedDate": "timestamp",
-                                "settledDate": "timestamp"
-                            }
-                        )
+                    var insertValues = bulk.typedRows(
+                        batch.map( ( entry ) => entry.values ),
+                        {
+                            "id": "varchar",
+                            "eventId": "varchar",
+                            "recipientType": "varchar",
+                            "recipientId": "varchar",
+                            "channel": "varchar",
+                            "deviceId": "varchar",
+                            "routingHash": "varchar",
+                            "routingData": "varchar",
+                            "state": "varchar",
+                            "attemptCount": "integer",
+                            "availableDate": "timestamp",
+                            "createdDate": "timestamp",
+                            "updatedDate": "timestamp",
+                            "settledDate": "timestamp"
+                        }
                     );
-                    var records = bulk.read(
-                        () => newDeliveryQuery(),
-                        batch.map( ( entry ) => entry.identity ),
-                        getTableName()
-                    );
+                    var records = [];
+                    if ( arguments.referencesOnly ) {
+                        records = bulk.insertReferences(
+                            query = newDeliveryQuery(),
+                            values = insertValues,
+                            identities = batch.map( ( entry ) => entry.identity ),
+                            columns = [
+                                "id",
+                                "routingHash",
+                                "state",
+                                "availableDate"
+                            ],
+                            queryFactory = () => newDeliveryQuery(),
+                            tableName = getTableName()
+                        );
+                    } else {
+                        newDeliveryQuery().insertIgnore( insertValues );
+                        records = bulk.read(
+                            () => newDeliveryQuery(),
+                            batch.map( ( entry ) => entry.identity ),
+                            getTableName()
+                        );
+                    }
                     for ( var index = 1; index <= batch.len(); index++ ) {
                         var stored = records[ index ][ 1 ];
                         if ( stored.routingHash != batch[ index ].values.routingHash ) {
@@ -78,9 +122,18 @@ component accessors="true" {
                                 message = "This delivery identity already refers to different routing content."
                             );
                         }
-                        var work = decode( stored );
-                        work.created = stored.id == batch[ index ].values.id;
-                        result.append( work );
+                        if ( arguments.referencesOnly ) {
+                            result.append( {
+                                "id": stored.id,
+                                "state": stored.state,
+                                "availableDate": stored.availableDate,
+                                "created": stored.id == batch[ index ].values.id
+                            } );
+                        } else {
+                            var work = decode( stored );
+                            work.created = stored.id == batch[ index ].values.id;
+                            result.append( work );
+                        }
                     }
                 }
             } catch ( any error ) {

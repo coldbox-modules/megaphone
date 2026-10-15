@@ -1,7 +1,12 @@
 /** Bounded identity reads retain database collation and caller order without per-row queries. */
 component {
 
-    public array function read( required any queryFactory, required array identities, required string tableName ) {
+    public array function read(
+        required any queryFactory,
+        required array identities,
+        required string tableName,
+        array columns = []
+    ) {
         var result = [];
         for ( var offset = 1; offset <= arguments.identities.len(); offset += 100 ) {
             var size = min( 100, arguments.identities.len() - offset + 1 );
@@ -34,7 +39,16 @@ component {
                 } else {
                     query.reset().from( arguments.tableName );
                     restoreWrapping( query, wrapping );
-                    query.selectRaw( "*, ? AS megaphoneBulkOrdinal", [ { "value": index, "cfsqltype": "integer" } ] );
+                    if ( arguments.columns.isEmpty() ) {
+                        query.selectRaw(
+                            "*, ? AS megaphoneBulkOrdinal",
+                            [ { "value": index, "cfsqltype": "integer" } ]
+                        );
+                    } else {
+                        query
+                            .select( arguments.columns )
+                            .selectRaw( "? AS megaphoneBulkOrdinal", [ { "value": index, "cfsqltype": "integer" } ] );
+                    }
                     for ( var key in shape.keys ) {
                         if ( isArray( identity[ key ] ) ) {
                             query.whereIn( key, identity[ key ] );
@@ -64,6 +78,80 @@ component {
                 var ordinal = val( row.megaphoneBulkOrdinal );
                 structDelete( row, "megaphoneBulkOrdinal" );
                 result[ offset + ordinal - 1 ].append( row );
+            }
+        }
+        return result;
+    }
+
+    /** Only qb's public executor with the unmodified PostgreSQL compiler supports this opt-in path. */
+    public boolean function supportsReturning( required any query ) {
+        if ( compareNoCase( getMetadata( arguments.query ).name, "qb.models.Query.QueryBuilder" ) != 0 ) {
+            return false;
+        }
+        var grammar = arguments.query.getGrammar();
+        if ( isCustomFunction( grammar.getResolvedGrammar ?: "" ) ) {
+            grammar = grammar.getResolvedGrammar();
+        }
+        if ( compareNoCase( getMetadata( grammar ).name, "qb.models.Grammars.PostgresGrammar" ) != 0 ) {
+            return false;
+        }
+        var metadata = getMetadata( arguments.query );
+        while ( isStruct( metadata ) ) {
+            for ( var method in metadata.functions ?: [] ) {
+                if ( compareNoCase( method.name, "runQuery" ) == 0 ) {
+                    return compareNoCase( method.access ?: "", "public" ) == 0;
+                }
+            }
+            if ( !isStruct( metadata.extends ?: "" ) ) {
+                break;
+            }
+            metadata = metadata.extends;
+        }
+        return false;
+    }
+
+    /** Fresh UUIDs identify returned inserts; only unresolved identities need a database read. */
+    public array function insertReferences(
+        required any query,
+        required array values,
+        required array identities,
+        required array columns,
+        required any queryFactory,
+        required string tableName
+    ) {
+        var sql = arguments.query.returning( arguments.columns ).insertIgnore( values = arguments.values, toSQL = true );
+        var inserted = arguments.query.runQuery(
+            // A SELECT-bearing statement exposes INSERT RETURNING rows on Lucee as well as BoxLang.
+            sql = "WITH ""megaphone_inserted"" AS (" & sql & ") SELECT * FROM ""megaphone_inserted""",
+            bindings = arguments.query.getBindings(),
+            returnObject = "query"
+        );
+        var byId = {};
+        for ( var row in inserted ) {
+            byId[ toString( row.id ) ] = row;
+        }
+        var result = [];
+        var unresolved = [];
+        var ordinals = [];
+        for ( var index = 1; index <= arguments.values.len(); index++ ) {
+            var id = arguments.values[ index ].id.value;
+            if ( structKeyExists( byId, id ) ) {
+                result.append( [ byId[ id ] ] );
+            } else {
+                result.append( [] );
+                unresolved.append( arguments.identities[ index ] );
+                ordinals.append( index );
+            }
+        }
+        if ( !unresolved.isEmpty() ) {
+            var existing = read(
+                arguments.queryFactory,
+                unresolved,
+                arguments.tableName,
+                arguments.columns
+            );
+            for ( var index = 1; index <= existing.len(); index++ ) {
+                result[ ordinals[ index ] ] = existing[ index ];
             }
         }
         return result;

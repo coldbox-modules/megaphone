@@ -401,7 +401,10 @@ component singleton accessors="true" {
                 if ( active.isEmpty() ) {
                     return;
                 }
-                var events = newEventStore().recordMany( active );
+                var eventStore = newEventStore();
+                var events = isCustomFunction( eventStore.recordReferences ?: "" )
+                 ? eventStore.recordReferences( active )
+                 : eventStore.recordMany( active );
                 var intents = [];
                 var optionsByIntent = [];
                 for ( var index = 1; index <= events.len(); index++ ) {
@@ -439,7 +442,10 @@ component singleton accessors="true" {
                         optionsByIntent.append( options );
                     }
                 }
-                var deliveries = newDeliveryStore().enqueueMany( intents );
+                var deliveryStore = newDeliveryStore();
+                var deliveries = isCustomFunction( deliveryStore.enqueueReferences ?: "" )
+                 ? deliveryStore.enqueueReferences( intents )
+                 : deliveryStore.enqueueMany( intents );
                 var groups = {};
                 for ( var index = 1; index <= deliveries.len(); index++ ) {
                     var delivery = deliveries[ index ];
