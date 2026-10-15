@@ -25,7 +25,12 @@ component accessors="true" {
         var sql = arguments.data.sql;
         if ( isAdmissionInsert( sql ) ) {
             var columns = findNoCase( "megaphone_deliveries", sql ) ? 14 : 9;
-            variables.counter.inserts.append( { "rows": arguments.data.bindings.len() / columns, "bindings": arguments.data.bindings.len() } );
+            var jsonRows = findNoCase( "JSONB_TO_RECORDSET", sql ) > 0;
+            variables.counter.inserts.append( {
+                "rows": jsonRows ? deserializeJSON( arguments.data.bindings[ 1 ].value ).len() : arguments.data.bindings.len() / columns,
+                "bindings": arguments.data.bindings.len(),
+                "json": jsonRows
+            } );
         }
         if ( findNoCase( "megaphone_bulk_records", sql ) ) {
             variables.counter.count++;

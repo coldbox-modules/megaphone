@@ -536,6 +536,12 @@ component {
         if ( !template.supported ) {
             return compileReferenceInsertFallback( argumentCollection = arguments );
         }
+        if ( stock ) {
+            var recordset = compileStockRecordsetInsert( arguments.query, arguments.values, template );
+            if ( recordset.supported ) {
+                return recordset;
+            }
+        }
         var bindings = [];
         var tuples = [];
         var utils = arguments.query.getUtils();
@@ -577,6 +583,91 @@ component {
             }
         }
         return { "sql": template.prefix & tuples.toList( template.separator ) & template.suffix, "bindings": bindings };
+    }
+
+    /** Stock prepared rows can replace thousands of scalar parameters with one bounded JSON recordset. */
+    private struct function compileStockRecordsetInsert(
+        required any query,
+        required array values,
+        required struct template
+    ) {
+        var grammar = arguments.query.getGrammar();
+        if ( isCustomFunction( grammar.getResolvedGrammar ?: "" ) ) {
+            grammar = grammar.getResolvedGrammar();
+        }
+        var utils = arguments.query.getUtils();
+        if ( !structKeyExists( variables, "temporalValues" ) ) {
+            variables.temporalValues = createObject( "java", "java.util.IdentityHashMap" ).init();
+        }
+        var columns = [];
+        var definitions = [];
+        for ( var descriptor in arguments.template.descriptors ) {
+            var type = lCase( reReplaceNoCase( descriptor.binding.cfsqltype, "^CF_SQL_", "" ) );
+            var sqlType = "";
+            if ( listFind( "varchar,char,nvarchar,nchar,longvarchar,longnvarchar", type ) ) {
+                sqlType = "TEXT";
+            } else if ( type == "integer" ) {
+                sqlType = "INTEGER";
+            } else if ( type == "timestamp" ) {
+                sqlType = "TIMESTAMP";
+            } else {
+                return { "supported": false };
+            }
+            columns.append( descriptor.column );
+            definitions.append(
+                grammar.wrapColumn( arguments.query.mapToColumnType( descriptor.column ) ) & " " & sqlType
+            );
+        }
+        var packed = [];
+        for ( var row in arguments.values ) {
+            var item = {};
+            for ( var descriptor in arguments.template.descriptors ) {
+                var cell = row[ descriptor.column ];
+                var value = descriptor.fromBinding ? cell.value : cell;
+                if ( descriptor.fromBinding && ( cell.null ?: false ) ) {
+                    // Missing JSON fields become SQL NULL, including on engines without full null structs.
+                    continue;
+                }
+                if ( descriptor.temporal ) {
+                    if ( !variables.temporalValues.containsKey( value ) ) {
+                        descriptor.input.value = value;
+                        descriptor.input.null = false;
+                        var normalized = utils.extractBinding(
+                            descriptor.fromBinding ? cell : descriptor.input,
+                            grammar
+                        );
+                        variables.temporalValues.put( value, normalized.value );
+                    }
+                    value = variables.temporalValues.get( value );
+                }
+                item[ descriptor.column ] = value;
+            }
+            packed.append( item );
+        }
+        var encoded = serializeJSON( packed );
+        if ( len( encoded ) > 8388608 ) {
+            return { "supported": false };
+        }
+        var source = arguments.query.newQuery();
+        source.fromRaw(
+            "JSONB_TO_RECORDSET(CAST(? AS JSONB)) AS " & grammar.wrapColumn(
+                arguments.query.mapToColumnType( "megaphone_admission_rows" )
+            ) &
+            "(" & definitions.toList( ", " ) & ")",
+            [
+                {
+                    "value": encoded,
+                    "cfsqltype": "varchar",
+                    "null": false,
+                    "list": false
+                }
+            ]
+        );
+        source.select( columns );
+        // PostgreSQL needs a WHERE clause to disambiguate INSERT SELECT followed by ON CONFLICT.
+        source.whereRaw( "1 = 1" );
+        var sql = arguments.query.insertUsing( source = source, columns = columns, toSQL = true );
+        return { "supported": true, "sql": sql & arguments.template.suffix, "bindings": arguments.query.getBindings() };
     }
 
     /** QB14 always supplies its private identity callback, even without custom formatting. */

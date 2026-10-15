@@ -79,7 +79,7 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                 if ( variables.fast ) {
                     expect( variables.counter.inserts.map( ( item ) => item.rows ) ).toBe( [ 1000, 1 ] );
                     expect( variables.counter.results.map( ( item ) => item.rows ) ).toBe( [ 1000, 1 ] );
-                    expect( variables.counter.inserts.every( ( item ) => item.bindings <= 30000 ) ).toBeTrue();
+                    expect( variables.counter.inserts.every( ( item ) => item.bindings == 1 && item.json ) ).toBeTrue();
                 }
                 for ( var event in eventReferences ) {
                     expect( event.keyArray().sort( "text" ) ).toBe( [ "created", "id" ] );
@@ -96,7 +96,7 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                 if ( variables.fast ) {
                     expect( variables.counter.inserts.map( ( item ) => item.rows ) ).toBe( [ 1000, 1 ] );
                     expect( variables.counter.results.map( ( item ) => item.rows ) ).toBe( [ 1000, 1 ] );
-                    expect( variables.counter.inserts.every( ( item ) => item.bindings <= 30000 ) ).toBeTrue();
+                    expect( variables.counter.inserts.every( ( item ) => item.bindings == 1 && item.json ) ).toBeTrue();
                 }
                 for ( var work in deliveryReferences ) {
                     expect( work.keyArray().sort( "text" ) ).toBe( [
@@ -238,7 +238,21 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                 var expected = referenceQuery();
                 expected.returning( [ "id", "type", "payloadHash" ] );
                 expected.insertIgnore( values = bulk.typedRows( rows, types ), toSQL = true );
-                expect( query.getQueryLog()[ 1 ].bindings ).toBe( expected.getBindings() );
+                expect( query.getQueryLog()[ 1 ].bindings.len() ).toBe( 1 );
+                var packed = deserializeJSON( query.getQueryLog()[ 1 ].bindings[ 1 ].value );
+                var normalBindings = expected.getBindings();
+                var names = rows[ 1 ].keyArray().sort( "text" );
+                var position = 1;
+                for ( var row in packed ) {
+                    for ( var name in names ) {
+                        var binding = normalBindings[ position++ ];
+                        if ( binding.null ) {
+                            expect( structKeyExists( row, name ) ).toBeFalse();
+                        } else {
+                            expect( row[ name ] ).toBe( binding.value );
+                        }
+                    }
+                }
                 for ( var index = 1; index <= rows.len(); index++ ) {
                     var stored = variables.events.find( admitted[ index ][ 1 ].id );
                     expect( stored.eventKey ).toBe( rows[ index ].eventKey );
