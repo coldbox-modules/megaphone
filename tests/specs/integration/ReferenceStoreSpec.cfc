@@ -191,6 +191,98 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                 expect( nextResult.len() ).toBe( 3 );
                 expect( compiles.sizes ).toBe( [ 1, 2 ] );
             } );
+            it( "uses the fixed stock schema with exact bindings but never trusts a custom store producer", () => {
+                var bulk = new megaphone.models.Storage.BulkRecords();
+                var customStore = new tests.resources.OverriddenReferenceEventStore();
+                expect( bulk.isStockComponent( customStore, "megaphone.models.Storage.EventStore" ) ).toBeFalse();
+                if ( !variables.fast ) {
+                    var reference = variables.events.recordReferences( [ eventInput( createUUID() ) ] )[ 1 ];
+                    expect( reference.created ).toBeTrue();
+                    expect( variables.counter.count ).toBeGT( 0 );
+                    return;
+                }
+                var types = {
+                    "id": "varchar",
+                    "namespace": "varchar",
+                    "eventKey": "varchar",
+                    "version": "integer",
+                    "type": "varchar",
+                    "payloadHash": "varchar",
+                    "payload": "varchar",
+                    "createdDate": "timestamp",
+                    "notificationMapping": "varchar"
+                };
+                var rows = referenceRows( 101 ).map( ( row ) => {
+                    var raw = {};
+                    for ( var name in row ) {
+                        raw[ name ] = name == "notificationMapping" ? row[ name ] : row[ name ].value;
+                    }
+                    return raw;
+                } );
+                var query = referenceQuery();
+                query.setCollectQueryLog( true );
+                var compiles = { "sizes": [] };
+                observeCompiler( query, compiles );
+                var admitted = bulk.insertStockReferences(
+                    store = variables.events,
+                    types = types,
+                    query = query,
+                    values = rows,
+                    identities = [],
+                    columns = [ "id", "type", "payloadHash" ],
+                    queryFactory = () => referenceQuery(),
+                    tableName = "megaphone_events"
+                );
+                expect( compiles.sizes ).toBe( [ 1, 2 ] );
+                expect( admitted.len() ).toBe( 101 );
+                var expected = referenceQuery();
+                expected.returning( [ "id", "type", "payloadHash" ] );
+                expected.insertIgnore( values = bulk.typedRows( rows, types ), toSQL = true );
+                expect( query.getQueryLog()[ 1 ].bindings ).toBe( expected.getBindings() );
+                for ( var index = 1; index <= rows.len(); index++ ) {
+                    var stored = variables.events.find( admitted[ index ][ 1 ].id );
+                    expect( stored.eventKey ).toBe( rows[ index ].eventKey );
+                    expect( stored.notificationMapping ?: "" ).toBe( rows[ index ].notificationMapping.value );
+                    expect( dateDiff( "l", stored.createdDate, rows[ index ].createdDate ) ).toBe( 0 );
+                }
+                var untrusted = referenceRows( 3 );
+                untrusted[ 2 ].payloadHash.maxlength = 100;
+                var fallback = referenceQuery();
+                var fallbackCompiles = { "sizes": [] };
+                observeCompiler( fallback, fallbackCompiles );
+                var fallbackResult = bulk.insertStockReferences(
+                    store = customStore,
+                    types = types,
+                    query = fallback,
+                    values = untrusted,
+                    identities = [],
+                    columns = [ "id", "type", "payloadHash" ],
+                    queryFactory = () => referenceQuery(),
+                    tableName = "megaphone_events"
+                );
+                expect( fallbackCompiles.sizes ).toBe( [ 3 ] );
+                expect( variables.events.find( fallbackResult[ 2 ][ 1 ].id ).payloadHash ).toBe(
+                    untrusted[ 2 ].payloadHash.value
+                );
+                var generic = referenceQuery();
+                var genericCompiles = { "sizes": [] };
+                observeCompiler( generic, genericCompiles );
+                var genericRows = referenceRows( 3 );
+                genericRows[ 2 ].payloadHash.maxlength = 100;
+                var genericResult = bulk.insertReferences(
+                    query = generic,
+                    values = genericRows,
+                    identities = [],
+                    columns = [ "id", "type", "payloadHash" ],
+                    queryFactory = () => referenceQuery(),
+                    tableName = "megaphone_events",
+                    stockTypes = types
+                );
+                expect( genericCompiles.sizes ).toBe( [ 3 ] );
+                expect( variables.events.find( genericResult[ 2 ][ 1 ].id ).payloadHash ).toBe(
+                    genericRows[ 2 ].payloadHash.value
+                );
+            } );
             it( "retains full public compilation for unsupported metadata, expressions and custom formatters", () => {
                 if ( !variables.fast ) {
                     var input = eventInput( createUUID() );

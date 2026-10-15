@@ -4,6 +4,7 @@ component {
     // A BulkRecords instance belongs to one store operation, never a shared request cache.
     variables.expectedSourcePaths = {};
     variables.canonicalSourcePaths = {};
+    variables.sourceIdentities = createObject( "java", "java.util.IdentityHashMap" ).init();
 
     public array function read(
         required any queryFactory,
@@ -89,7 +90,29 @@ component {
 
     /** A mapping alias may rename the same stock component; subclasses still have different source files. */
     public boolean function isStockComponent( required any instance, required string mapping ) {
-        return isStockMetadata( getMetadata( arguments.instance ), arguments.mapping );
+        var identity = sourceIdentity( arguments.instance );
+        if ( !structKeyExists( identity, arguments.mapping ) ) {
+            identity[ arguments.mapping ] = isStockMetadata(
+                componentMetadata( arguments.instance ),
+                arguments.mapping
+            );
+        }
+        return identity[ arguments.mapping ];
+    }
+
+    private struct function sourceIdentity( required any instance ) {
+        if ( !variables.sourceIdentities.containsKey( arguments.instance ) ) {
+            variables.sourceIdentities.put( arguments.instance, {} );
+        }
+        return variables.sourceIdentities.get( arguments.instance );
+    }
+
+    private struct function componentMetadata( required any instance ) {
+        var identity = sourceIdentity( arguments.instance );
+        if ( !structKeyExists( identity, "metadata" ) ) {
+            identity.metadata = getMetadata( arguments.instance );
+        }
+        return identity.metadata;
     }
 
     private boolean function isStockMetadata( required struct metadata, required string mapping ) {
@@ -120,7 +143,7 @@ component {
 
     /** Only qb's public executor with the unmodified PostgreSQL compiler supports this opt-in path. */
     public boolean function supportsReturning( required any query ) {
-        var metadata = getMetadata( arguments.query );
+        var metadata = componentMetadata( arguments.query );
         if ( !isStockMetadata( metadata, "qb.models.Query.QueryBuilder" ) ) {
             return false;
         }
@@ -145,7 +168,7 @@ component {
         return false;
     }
 
-    /** Fresh UUIDs identify returned inserts; only unresolved identities need a database read. */
+    /** Public typed-cell callers retain complete per-row validation. */
     public array function insertReferences(
         required any query,
         required array values,
@@ -155,11 +178,58 @@ component {
         required string tableName,
         struct templates = {}
     ) {
+        var options = structCopy( arguments );
+        structDelete( options, "stockTypes" );
+        return writeReferenceRows( argumentCollection = options );
+    }
+
+    /** Internal stock-store boundary: values have already passed the stores' private typed preparation. */
+    public array function insertStockReferences(
+        required any store,
+        required struct types,
+        required any query,
+        required array values,
+        required array identities,
+        required array columns,
+        required any queryFactory,
+        required string tableName,
+        struct templates = {}
+    ) {
+        var options = structCopy( arguments );
+        structDelete( options, "stockTypes" );
+        structDelete( options, "store" );
+        structDelete( options, "types" );
+        if (
+            isStockComponent( arguments.store, "megaphone.models.Storage.EventStore" ) || isStockComponent(
+                arguments.store,
+                "megaphone.models.Storage.DeliveryStore"
+            )
+        ) {
+            options.stockTypes = arguments.types;
+        } else {
+            // A custom producer cannot opt its arbitrary rows out of public validation.
+            options.values = typedRows( arguments.values, arguments.types );
+        }
+        return writeReferenceRows( argumentCollection = options );
+    }
+
+    /** Fresh UUIDs identify returned inserts; only unresolved identities need a database read. */
+    private array function writeReferenceRows(
+        required any query,
+        required array values,
+        required array identities,
+        required array columns,
+        required any queryFactory,
+        required string tableName,
+        struct templates = {},
+        struct stockTypes = {}
+    ) {
         var compiled = compileReferenceInsert(
             arguments.query,
             arguments.values,
             arguments.columns,
-            arguments.templates
+            arguments.templates,
+            arguments.stockTypes
         );
         var inserted = arguments.query.runQuery(
             // A SELECT-bearing statement exposes INSERT RETURNING rows on Lucee as well as BoxLang.
@@ -175,7 +245,8 @@ component {
         var unresolved = [];
         var ordinals = [];
         for ( var index = 1; index <= arguments.values.len(); index++ ) {
-            var id = arguments.values[ index ].id.value;
+            var originalId = arguments.values[ index ].id;
+            var id = isStruct( originalId ) ? originalId.value : originalId;
             if ( structKeyExists( byId, id ) ) {
                 result.append( [ byId[ id ] ] );
             } else {
@@ -203,7 +274,8 @@ component {
         required any query,
         required array values,
         required array columns,
-        required struct templates
+        required struct templates,
+        struct stockTypes = {}
     ) {
         if (
             !supportsReturning( arguments.query ) || !isStockComponent(
@@ -213,7 +285,9 @@ component {
         ) {
             return compileReferenceInsertFallback( argumentCollection = arguments );
         }
-        var shape = referenceInsertShape( arguments.values );
+        var stock = !arguments.stockTypes.isEmpty();
+        var sample = stock ? typedRows( [ arguments.values[ 1 ] ], arguments.stockTypes )[ 1 ] : arguments.values[ 1 ];
+        var shape = referenceInsertShape( stock ? [ sample ] : arguments.values );
         if ( !shape.supported ) {
             return compileReferenceInsertFallback( argumentCollection = arguments );
         }
@@ -221,19 +295,41 @@ component {
         if ( !isNull( arguments.query.getShouldWrapValues() ) ) {
             wrapping.value = arguments.query.getShouldWrapValues();
         }
+        var firstRaw = arguments.values[ 1 ];
+        var inputKinds = stock ? shape.names.map( ( name ) => isStruct( firstRaw[ name ] ) ) : [];
         var key = serializeJSON( [
             arguments.query.getTableName(),
             arguments.columns,
             shape.metadata,
+            stock,
+            inputKinds,
             wrapping
         ] );
         if ( !structKeyExists( arguments.templates, key ) ) {
             arguments.templates[ key ] = referenceInsertTemplate(
                 arguments.query,
-                arguments.values[ 1 ],
+                sample,
                 arguments.columns,
                 shape.names
             );
+            if ( stock && arguments.templates[ key ].supported ) {
+                for ( var descriptor in arguments.templates[ key ].descriptors ) {
+                    descriptor.fromBinding = isStruct( arguments.values[ 1 ][ descriptor.column ] );
+                    descriptor.input = structCopy( sample[ descriptor.column ] );
+                    // Direct stock bindings reproduce exactly the compiler's five normalized fields.
+                    if (
+                        structCount( descriptor.binding ) != 5 || !structKeyExists( descriptor.binding, "value" ) || !structKeyExists(
+                            descriptor.binding,
+                            "cfsqltype"
+                        ) || !structKeyExists( descriptor.binding, "sqltype" ) || !structKeyExists(
+                            descriptor.binding,
+                            "null"
+                        ) || !structKeyExists( descriptor.binding, "list" )
+                    ) {
+                        arguments.templates[ key ].supported = false;
+                    }
+                }
+            }
         }
         var template = arguments.templates[ key ];
         if ( !template.supported ) {
@@ -248,7 +344,27 @@ component {
             for ( var descriptor in template.descriptors ) {
                 var cell = row[ descriptor.column ];
                 var binding = {};
-                if ( !( cell.null ?: false ) && descriptor.temporal ) {
+                if ( stock ) {
+                    var rawValue = descriptor.fromBinding ? cell.value : cell;
+                    var nullValue = descriptor.fromBinding ? ( cell.null ?: false ) : false;
+                    if ( descriptor.temporal && !nullValue ) {
+                        var temporalInput = cell;
+                        if ( !descriptor.fromBinding ) {
+                            descriptor.input.value = rawValue;
+                            descriptor.input.null = false;
+                            temporalInput = descriptor.input;
+                        }
+                        binding = utils.extractBinding( temporalInput, grammar );
+                    } else {
+                        binding = {
+                            "value": rawValue,
+                            "cfsqltype": descriptor.binding.cfsqltype,
+                            "sqltype": descriptor.binding.sqltype,
+                            "null": nullValue,
+                            "list": descriptor.binding.list
+                        };
+                    }
+                } else if ( !( cell.null ?: false ) && descriptor.temporal ) {
                     // Date/time normalization remains owned by the configured public qb utility.
                     binding = utils.extractBinding( cell, grammar );
                 } else {
@@ -268,7 +384,7 @@ component {
         if ( isNull( formatter ) || !isCustomFunction( formatter ) || isClosure( formatter ) ) {
             return false;
         }
-        var metadata = getMetadata( formatter );
+        var metadata = componentMetadata( formatter );
         return compareNoCase( metadata.name ?: "", "identityColumnFormatter" ) == 0 && compareNoCase(
             metadata.access ?: "",
             "private"
@@ -278,10 +394,15 @@ component {
     private struct function compileReferenceInsertFallback(
         required any query,
         required array values,
-        required array columns
+        required array columns,
+        struct stockTypes = {}
     ) {
+        var values = arguments.stockTypes.isEmpty() ? arguments.values : typedRows(
+            arguments.values,
+            arguments.stockTypes
+        );
         arguments.query.returning( arguments.columns );
-        var sql = arguments.query.insertIgnore( values = arguments.values, toSQL = true );
+        var sql = arguments.query.insertIgnore( values = values, toSQL = true );
         return { "sql": sql, "bindings": arguments.query.getBindings() };
     }
 
@@ -326,12 +447,7 @@ component {
                     return result;
                 }
                 for ( var key in descriptor.binding ) {
-                    if (
-                        !structKeyExists( cell, key ) || compare(
-                            toString( cell[ key ] ),
-                            toString( descriptor.binding[ key ] )
-                        ) != 0
-                    ) {
+                    if ( !structKeyExists( cell, key ) || compare( cell[ key ], descriptor.binding[ key ] ) != 0 ) {
                         return result;
                     }
                 }

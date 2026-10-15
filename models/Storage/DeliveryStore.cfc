@@ -66,6 +66,22 @@ component accessors="true" {
         }
         var bulk = isNull( arguments.bulkRecords ) ? new megaphone.models.Storage.BulkRecords() : arguments.bulkRecords;
         var referenceTemplates = {};
+        var insertTypes = {
+            "id": "varchar",
+            "eventId": "varchar",
+            "recipientType": "varchar",
+            "recipientId": "varchar",
+            "channel": "varchar",
+            "deviceId": "varchar",
+            "routingHash": "varchar",
+            "routingData": "varchar",
+            "state": "varchar",
+            "attemptCount": "integer",
+            "availableDate": "timestamp",
+            "createdDate": "timestamp",
+            "updatedDate": "timestamp",
+            "settledDate": "timestamp"
+        };
         var size = arguments.referencesOnly ? max( 1, min( 1000, int( 30000 / structCount( prepared[ 1 ].values ) ) ) ) : bulk.insertSize(
             prepared[ 1 ].values
         );
@@ -73,28 +89,13 @@ component accessors="true" {
             try {
                 for ( var offset = 1; offset <= prepared.len(); offset += size ) {
                     var batch = prepared.slice( offset, min( size, prepared.len() - offset + 1 ) );
-                    var insertValues = bulk.typedRows(
-                        batch.map( ( entry ) => entry.values ),
-                        {
-                            "id": "varchar",
-                            "eventId": "varchar",
-                            "recipientType": "varchar",
-                            "recipientId": "varchar",
-                            "channel": "varchar",
-                            "deviceId": "varchar",
-                            "routingHash": "varchar",
-                            "routingData": "varchar",
-                            "state": "varchar",
-                            "attemptCount": "integer",
-                            "availableDate": "timestamp",
-                            "createdDate": "timestamp",
-                            "updatedDate": "timestamp",
-                            "settledDate": "timestamp"
-                        }
-                    );
+                    var rawValues = batch.map( ( entry ) => entry.values );
+                    var insertValues = arguments.referencesOnly ? rawValues : bulk.typedRows( rawValues, insertTypes );
                     var records = [];
                     if ( arguments.referencesOnly ) {
-                        records = bulk.insertReferences(
+                        records = bulk.insertStockReferences(
+                            store = this,
+                            types = insertTypes,
                             query = newDeliveryQuery(),
                             values = insertValues,
                             identities = batch.map( ( entry ) => entry.identity ),
