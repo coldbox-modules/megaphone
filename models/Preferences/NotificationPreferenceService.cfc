@@ -44,6 +44,11 @@ component singleton {
         return variables.store.configuration( argumentCollection = arguments );
     }
 
+    /** Resolves an ordered batch of the same arguments accepted by resolvePreferences. */
+    public array function resolvePreferencesMany( required array requests ) {
+        return variables.store.configurationMany( arguments.requests );
+    }
+
     /**
      * Imports a preference without replacing a choice already stored.
      */

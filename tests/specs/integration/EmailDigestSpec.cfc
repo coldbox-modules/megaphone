@@ -619,6 +619,32 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                 expect( suppressed.getCollections()[ 1 ].id ).toBe( admitted.getCollections()[ 1 ].id );
                 expect( suppressed.getCollections()[ 1 ].status ).toBe( "suppressed" );
             } );
+            it( "queuePlans preserves scalar collection admission and replay without queued transport", () => {
+                var first = variables.notifications.plan(
+                    variables.owner,
+                    new tests.resources.DigestNotificationFixture(),
+                    item( "bulk-collected-one" ),
+                    { "eventKey": createUUID() }
+                );
+                var second = variables.notifications.plan(
+                    variables.owner,
+                    new tests.resources.DigestNotificationFixture(),
+                    item( "bulk-collected-two" ),
+                    { "eventKey": createUUID() }
+                );
+                var publications = variables.notifications.queuePlans( [ first, second ] );
+                var replayed = variables.notifications.queuePlans( [ first, second ] );
+                for ( var index = 1; index <= 2; index++ ) {
+                    expect( publications[ index ].getCollections().len() ).toBe( 1 );
+                    expect( publications[ index ].getCollections()[ 1 ].status ).toBe( "collected" );
+                    expect( replayed[ index ].getCollections()[ 1 ].id ).toBe(
+                        publications[ index ].getCollections()[ 1 ].id
+                    );
+                    expect( replayed[ index ].getCollections()[ 1 ].created ).toBeFalse();
+                    expect( publications[ index ].getDeliveries() ).toBeEmpty();
+                }
+                expect( variables.mail.getSent() ).toBeEmpty();
+            } );
             it( "queuePlan returns collection independently of delivered email and deduplicates event replays", () => {
                 // Admit now into a future schedule; no queue adapter or provider send is involved.
                 var plan = variables.notifications.plan(

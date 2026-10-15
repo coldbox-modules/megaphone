@@ -54,6 +54,18 @@ component singleton accessors="true" {
         string connection,
         string queue
     ) {
+        return capturePlan( argumentCollection = arguments );
+    }
+
+    private NotificationPlan function capturePlan(
+        required any notifiables,
+        required any notification,
+        struct properties = {},
+        struct options = {},
+        string connection,
+        string queue,
+        boolean deferHashes = false
+    ) {
         var queueOptions = {};
         for ( var name in [ "connection", "queue" ] ) {
             if ( !isNull( arguments[ name ] ) ) {
@@ -94,7 +106,10 @@ component singleton accessors="true" {
                 message = "Event identity and a positive integer version are required."
             );
         }
-        event.payloadHash = runtime.digest( event.payload, { "namespace": event.namespace, "kind": "payload" } );
+        event.payloadHash = arguments.deferHashes ? "" : runtime.digest(
+            event.payload,
+            { "namespace": event.namespace, "kind": "payload" }
+        );
         var plan = newNotificationPlan().configure(
             event,
             [],
@@ -180,7 +195,10 @@ component singleton accessors="true" {
                         "deviceId": deviceId,
                         "enabled": enabled,
                         "routingData": routing,
-                        "routingHash": runtime.digest( routing, { "namespace": event.namespace, "kind": "routing" } ),
+                        "routingHash": arguments.deferHashes ? "" : runtime.digest(
+                            routing,
+                            { "namespace": event.namespace, "kind": "routing" }
+                        ),
                         "availableDate": arguments.options.availableDate ?: now()
                     } );
                 }
@@ -192,6 +210,195 @@ component singleton accessors="true" {
             arguments.options.admitAfter ?: javacast( "null", "" ),
             queueOptions
         );
+    }
+
+    /** Captures ordinary plan() requests and hashes their snapshots together in input order. */
+    public array function planMany( required array requests ) {
+        var plans = [];
+        var captures = [];
+        var hashes = [];
+        for ( var inputRequest in arguments.requests ) {
+            var options = structCopy( inputRequest );
+            options.deferHashes = true;
+            var plan = capturePlan( argumentCollection = options );
+            var captured = plan.getMemento();
+            plans.append( plan );
+            captures.append( captured );
+            hashes.append( { "value": captured.event.payload, "context": { "namespace": captured.event.namespace, "kind": "payload" } } );
+            for ( var intent in captured.deliveries ) {
+                hashes.append( { "value": intent.routingData, "context": { "namespace": captured.event.namespace, "kind": "routing" } } );
+            }
+        }
+        if ( hashes.isEmpty() ) {
+            return plans;
+        }
+        var digests = newNotificationRuntime().digestMany( hashes );
+        var cursor = 1;
+        for ( var index = 1; index <= plans.len(); index++ ) {
+            var captured = captures[ index ];
+            captured.event.payloadHash = digests[ cursor++ ];
+            for ( var intent in captured.deliveries ) {
+                intent.routingHash = digests[ cursor++ ];
+            }
+            var argumentsForPlan = {
+                "event": captured.event,
+                "deliveries": captured.deliveries,
+                "queueOptions": plans[ index ].getQueueOptions()
+            };
+            if ( !isNull( captured.admitAfter ) ) {
+                argumentsForPlan.admitAfter = captured.admitAfter;
+            }
+            plans[ index ].configure( argumentCollection = argumentsForPlan );
+        }
+        return plans;
+    }
+
+    /** All plans share one publication transaction, including legacy adapter and digest fallbacks. */
+    public array function queuePlans(
+        required array plans,
+        boolean alreadyAdmitted = false,
+        string connection,
+        string queue
+    ) {
+        var result = [];
+        if ( arguments.plans.isEmpty() ) {
+            return result;
+        }
+        var runtime = newNotificationRuntime();
+        var settings = runtime.getSettings();
+        var captures = arguments.plans.map( ( plan ) => plan.getMemento() );
+        var fallback = structKeyExists( settings, "digests" ) && !structIsEmpty( settings.digests );
+        for ( var captured in captures ) {
+            for ( var intent in captured.deliveries ) {
+                fallback = fallback || ( intent.collection ?: false ) || structKeyExists(
+                    intent.routingData,
+                    "emailDigest"
+                );
+            }
+        }
+        transaction {
+            try {
+                if ( fallback ) {
+                    for ( var plan in arguments.plans ) {
+                        var original = { "plan": plan, "alreadyAdmitted": arguments.alreadyAdmitted };
+                        for ( var key in [ "connection", "queue" ] ) {
+                            if ( !isNull( arguments[ key ] ) ) {
+                                original[ key ] = arguments[ key ];
+                            }
+                        }
+                        result.append( queuePlan( argumentCollection = original ) );
+                    }
+                    return result;
+                }
+                var active = [];
+                var ordinals = [];
+                for ( var index = 1; index <= captures.len(); index++ ) {
+                    var captured = captures[ index ];
+                    if (
+                        !arguments.alreadyAdmitted && !isNull( captured.admitAfter ) && dateCompare(
+                            captured.event.createdDate,
+                            captured.admitAfter
+                        ) < 0
+                    ) {
+                        result.append(
+                            newNotificationPublication().configure(
+                                newNotificationEvent().configure( { "expired": true } )
+                            )
+                        );
+                    } else {
+                        result.append( "" );
+                        active.append( captured.event );
+                        ordinals.append( index );
+                    }
+                }
+                if ( active.isEmpty() ) {
+                    return result;
+                }
+                var service = newDeliveryService();
+                var events = service.recordEvents( active );
+                var entries = [];
+                var deliveryIndexes = {};
+                for ( var index = 1; index <= events.len(); index++ ) {
+                    var event = events[ index ];
+                    if ( event.getCreated() ) {
+                        deliveryIndexes[ event.getId() ] = [];
+                        for ( var intent in captures[ ordinals[ index ] ].deliveries ) {
+                            entries.append( { "eventId": event.getId(), "intent": intent } );
+                            deliveryIndexes[ event.getId() ].append( entries.len() );
+                        }
+                    }
+                }
+                var admitted = service.createDeliveries( entries );
+                var stored = service.getDeliveriesForEvents(
+                    events.filter( ( event ) => !event.getCreated() ).map( ( event ) => event.getId() )
+                );
+                var byEvent = {};
+                for ( var delivery in stored ) {
+                    if ( !structKeyExists( byEvent, delivery.getEventId() ) ) {
+                        byEvent[ delivery.getEventId() ] = [];
+                    }
+                    byEvent[ delivery.getEventId() ].append( delivery );
+                }
+                var groups = {};
+                for ( var index = 1; index <= events.len(); index++ ) {
+                    var event = events[ index ];
+                    var deliveries = [];
+                    if ( event.getCreated() ) {
+                        for ( var position in deliveryIndexes[ event.getId() ] ) {
+                            deliveries.append( admitted[ position ] );
+                        }
+                    } else {
+                        deliveries = byEvent[ event.getId() ] ?: [];
+                    }
+                    result[ ordinals[ index ] ] = newNotificationPublication().configure( event, deliveries );
+                    var queueOptions = arguments.plans[ ordinals[ index ] ].getQueueOptions();
+                    for ( var key in [ "connection", "queue" ] ) {
+                        if ( !isNull( arguments[ key ] ) ) {
+                            queueOptions[ key ] = arguments[ key ];
+                        }
+                    }
+                    var groupKey = hash(
+                        serializeJSON( [
+                            queueOptions.connection ?: javacast( "null", "" ),
+                            queueOptions.queue ?: javacast( "null", "" )
+                        ] ),
+                        "SHA-256"
+                    );
+                    if ( !structKeyExists( groups, groupKey ) ) {
+                        groups[ groupKey ] = { "options": queueOptions, "deliveries": [] };
+                    }
+                    for ( var delivery in deliveries ) {
+                        if ( event.getCreated() && delivery.getCreated() && delivery.getState() == "queued" ) {
+                            groups[ groupKey ].deliveries.append( delivery );
+                        }
+                    }
+                }
+                var adapter = runtime.resolve( "queueAdapter" );
+                if ( !isNull( adapter ) ) {
+                    for ( var key in groups ) {
+                        var group = groups[ key ];
+                        if ( group.deliveries.isEmpty() ) {
+                            continue;
+                        }
+                        if ( isCustomFunction( adapter.enqueueMany ?: "" ) ) {
+                            var enqueueArguments = duplicate( group.options );
+                            enqueueArguments.deliveries = group.deliveries;
+                            adapter.enqueueMany( argumentCollection = enqueueArguments );
+                        } else {
+                            for ( var delivery in group.deliveries ) {
+                                var enqueueArguments = duplicate( group.options );
+                                enqueueArguments.delivery = delivery;
+                                adapter.enqueue( argumentCollection = enqueueArguments );
+                            }
+                        }
+                    }
+                }
+                return result;
+            } catch ( any error ) {
+                transactionRollback();
+                rethrow;
+            }
+        }
     }
 
     /**

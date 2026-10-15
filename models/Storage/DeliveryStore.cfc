@@ -28,6 +28,77 @@ component accessors="true" {
         string initialState = "queued",
         date availableDate = now()
     ) {
+        return enqueueMany( [ arguments ] )[ 1 ];
+    }
+
+    /** Batch admission never replaces an existing delivery or resets its lifecycle. */
+    public array function enqueueMany( required array intents ) {
+        var prepared = arguments.intents.map( ( intent ) => prepareDelivery( argumentCollection = intent ) );
+        var result = [];
+        if ( prepared.isEmpty() ) {
+            return result;
+        }
+        var bulk = new megaphone.models.Storage.BulkRecords();
+        var size = bulk.insertSize( prepared[ 1 ].values );
+        transaction {
+            try {
+                for ( var offset = 1; offset <= prepared.len(); offset += size ) {
+                    var batch = prepared.slice( offset, min( size, prepared.len() - offset + 1 ) );
+                    newDeliveryQuery().insertIgnore( batch.map( ( entry ) => entry.values ) );
+                    var records = bulk.read( () => newDeliveryQuery(), batch.map( ( entry ) => entry.identity ) );
+                    for ( var index = 1; index <= batch.len(); index++ ) {
+                        var stored = records[ index ][ 1 ];
+                        if ( stored.routingHash != batch[ index ].values.routingHash ) {
+                            throw(
+                                type = "Megaphone.Delivery.IdentityConflict",
+                                message = "This delivery identity already refers to different routing content."
+                            );
+                        }
+                        var work = decode( stored );
+                        work.created = stored.id == batch[ index ].values.id;
+                        result.append( work );
+                    }
+                }
+            } catch ( any error ) {
+                transactionRollback();
+                rethrow;
+            }
+        }
+        return result;
+    }
+
+    /** Returns saved work for bounded event sets, including suppressed and terminal history. */
+    public array function forEvents( required array eventIds ) {
+        var result = [];
+        var seen = {};
+        var uniqueIds = [];
+        for ( var id in arguments.eventIds ) {
+            var key = hash( id, "SHA-256" );
+            if ( !structKeyExists( seen, key ) ) {
+                seen[ key ] = true;
+                uniqueIds.append( id );
+            }
+        }
+        for ( var offset = 1; offset <= uniqueIds.len(); offset += 100 ) {
+            var ids = uniqueIds.slice( offset, min( 100, uniqueIds.len() - offset + 1 ) );
+            for ( var row in newDeliveryQuery().whereIn( "eventId", ids ).get() ) {
+                result.append( decode( row ) );
+            }
+        }
+        return result;
+    }
+
+    private struct function prepareDelivery(
+        required string eventId,
+        required string recipientType,
+        required string recipientId,
+        required string channel,
+        required struct routingData,
+        required string routingHash,
+        string deviceId = "",
+        string initialState = "queued",
+        date availableDate = now()
+    ) {
         if (
             !len( trim( arguments.eventId ) ) || !len( trim( arguments.recipientType ) ) ||
             !len( trim( arguments.recipientId ) ) || !len( trim( arguments.channel ) ) ||
@@ -46,7 +117,8 @@ component accessors="true" {
             "deviceId": arguments.deviceId
         };
         var values = duplicate( identity );
-        values.deviceId = textBinding( identity.deviceId );
+        identity.deviceId = textBinding( identity.deviceId );
+        values.deviceId = identity.deviceId;
         values.append( {
             "id": uuid(),
             "routingHash": arguments.routingHash,
@@ -58,23 +130,7 @@ component accessors="true" {
             "updatedDate": now(),
             "settledDate": timestamp( arguments.initialState == "suppressed" ? now() : javacast( "null", "" ) )
         } );
-        newDeliveryQuery().insertIgnore( values );
-        var stored = newDeliveryQuery()
-            .where( "eventId", identity.eventId )
-            .where( "recipientType", identity.recipientType )
-            .where( "recipientId", identity.recipientId )
-            .where( "channel", identity.channel )
-            .where( "deviceId", textBinding( identity.deviceId ) )
-            .get()[ 1 ];
-        if ( stored.routingHash != arguments.routingHash ) {
-            throw(
-                type = "Megaphone.Delivery.IdentityConflict",
-                message = "This delivery identity already refers to different routing content."
-            );
-        }
-        var result = decode( stored );
-        result[ "created" ] = stored.id == values.id;
-        return result;
+        return { "identity": identity, "values": values };
     }
 
     /** Trusted migration boundary. Restores storage state without routing, claims, or provider I/O. */

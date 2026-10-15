@@ -439,6 +439,26 @@ Notifications extend `BaseNotification`, implement `via(notifiable)` and the usu
 
 `getQueueProperties()` defaults to the explicitly populated properties. Notifications configured through setters must override it to return their durable properties. Store JSON data rather than components, closures, credentials, users, or prepared mail/request objects. `getNotificationMapping()` defaults to the WireBox identity, or the component path for directly constructed instances; override it when notification type and reconstruction mapping differ. `getDeliveryContext(notifiable, channelName)` provides application routing context, separate from the notification properties.
 
+### Bulk durable admission
+
+`planMany(requests)` accepts an ordered array of the same named arguments as `plan()` and returns one `NotificationPlan` per request. Each request may supply a notification mapping or an already-created notification object. This allows an application to preload transient preferences on a distinct notification instance without adding them to its queued properties.
+
+```cfml
+var plans = notificationService.planMany( [
+    { notifiables: firstRecipient, notification: "ReceiptNotification", properties: { receiptId: "one" }, options: { eventKey: "receipt-one" } },
+    { notifiables: secondRecipient, notification: "ReceiptNotification", properties: { receiptId: "two" }, options: { eventKey: "receipt-two" } }
+] );
+var publications = notificationService.queuePlans( plans=plans, connection="database", queue="notifications" );
+```
+
+`queuePlans()` returns ordered `NotificationPublication` objects. Event and delivery writes use bounded batches in one datasource transaction, including queue insertion. A failure in any chunk rolls back the batch and the caller's transaction. The queue adapter must participate in that same transaction for queue atomicity. Replays return the original stored audience, suppression choices, and lifecycle state; they neither expand recipients nor enqueue work again. Only newly admitted queued deliveries reach the adapter. Admission cutoffs, explicit queue routing, and `alreadyAdmitted` retain the scalar API semantics.
+
+Queue adapters may implement `enqueueMany(deliveries, connection?, queue?)`, receiving public `NotificationDelivery` objects. Existing adapters that only implement `enqueue()` remain supported. The bundled cbq adapter uses its public bulk dispatcher for immediately available jobs and retains scalar scheduling for delayed jobs. Actual batching depends on the configured cbq provider/version. Plans involving collections, and applications with configured named digests, use the existing scalar admission path inside the shared transaction so collection history and replay behavior remain intact.
+
+Custom snapshot hashers may implement `digestMany(entries)`, where each ordered entry has `value` and `context` matching `digest(value, context)`. Return exactly one nonempty hash string per entry using the same canonicalization as the scalar method. Without that optional method, Megaphone calls `digest()` for each snapshot.
+
+`NotificationPreferenceService.resolvePreferencesMany(requests)` accepts ordered structs containing `notifiable`, `notificationType`, `defaults`, and `scopeKeys`, matching `resolvePreferences()`. It returns the same `{ scopes, effective }` configuration per request, preserving recipient ownership, ordered scope precedence, and source labels without a shared preference cache.
+
 ### Module configuration
 
 ```cfc

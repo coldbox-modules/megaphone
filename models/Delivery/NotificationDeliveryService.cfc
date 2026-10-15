@@ -23,6 +23,13 @@ component singleton {
         return newNotificationEvent().configure( variables.eventStore.record( argumentCollection = arguments ) );
     }
 
+    /** Records an atomic batch through the configured event store. */
+    public array function recordEvents( required array events ) {
+        return variables.eventStore
+            .recordMany( arguments.events )
+            .map( ( row ) => newNotificationEvent().configure( row ) );
+    }
+
     /**
      * Loads a public event object by ID, or returns null.
      * @returns any
@@ -62,6 +69,29 @@ component singleton {
         values.eventId = arguments.eventId;
         values.initialState = arguments.intent.enabled ? "queued" : "suppressed";
         return delivery( variables.deliveryStore.enqueue( argumentCollection = values ) );
+    }
+
+    /** Creates an ordered batch of public delivery intents without provider I/O. */
+    public array function createDeliveries( required array entries ) {
+        var intents = [];
+        for ( var entry in arguments.entries ) {
+            if ( !structKeyExists( entry.intent, "enabled" ) || !isBoolean( entry.intent.enabled ) ) {
+                throw(
+                    type = "Megaphone.Delivery.InvalidIntent",
+                    message = "Every delivery needs an explicit channel choice."
+                );
+            }
+            var values = storageIntent( entry.intent );
+            values.eventId = entry.eventId;
+            values.initialState = entry.intent.enabled ? "queued" : "suppressed";
+            intents.append( values );
+        }
+        return variables.deliveryStore.enqueueMany( intents ).map( ( row ) => delivery( row ) );
+    }
+
+    /** Loads persisted work for a bounded set of events without expanding its audience. */
+    public array function getDeliveriesForEvents( required array eventIds ) {
+        return variables.deliveryStore.forEvents( arguments.eventIds ).map( ( row ) => delivery( row ) );
     }
 
     /**

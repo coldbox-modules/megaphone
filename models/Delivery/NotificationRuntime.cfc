@@ -42,6 +42,37 @@ component singleton {
         return hasher.digest( arguments.value, arguments.context );
     }
 
+    /** Optional bulk hashing keeps custom canonicalization identical and ordered. */
+    public array function digestMany( required array entries ) {
+        var hasher = resolve(
+            "snapshotHasher",
+            variables.wirebox.getInstance( "NotificationSnapshotHasher@megaphone" )
+        );
+        var result = [];
+        if ( isCustomFunction( hasher.digestMany ?: "" ) ) {
+            result = hasher.digestMany( arguments.entries );
+        } else {
+            for ( var entry in arguments.entries ) {
+                result.append( hasher.digest( entry.value, entry.context ) );
+            }
+        }
+        if ( !isArray( result ) || result.len() != arguments.entries.len() ) {
+            throw(
+                type = "Megaphone.Notification.InvalidHashes",
+                message = "A bulk hasher must return one hash per snapshot in input order."
+            );
+        }
+        for ( var digest in result ) {
+            if ( !isSimpleValue( digest ) || !len( trim( digest ) ) ) {
+                throw(
+                    type = "Megaphone.Notification.InvalidHashes",
+                    message = "Snapshot hashes must be nonempty strings."
+                );
+            }
+        }
+        return result;
+    }
+
     /**
      * Loads the current Notifiable through the application resolver.
      * @returns any

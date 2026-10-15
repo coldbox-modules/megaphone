@@ -89,30 +89,56 @@ component accessors="true" {
 
     /** Ordered scopes supplied by the application; ownership is enforced before filtering. */
     public array function choices( required any notifiable, required string notificationType, required array scopeKeys ) {
-        var identity = recipient( arguments.notifiable );
-        validateKey( arguments.notificationType, 160 );
-        if ( arguments.scopeKeys.isEmpty() ) {
-            return [];
-        }
-        for ( var scopeKey in arguments.scopeKeys ) {
-            validateKey( scopeKey, 100 );
-        }
-        var rows = newPreferenceQuery()
-            .where( "recipientType", identity.recipientType )
-            .where( "recipientId", identity.recipientId )
-            .where( "notificationType", arguments.notificationType )
-            .whereIn( "scopeKey", arguments.scopeKeys )
-            .get();
-        var lookup = {};
-        for ( var row in rows ) {
-            if ( !structKeyExists( lookup, row.scopeKey ) ) {
-                lookup[ row.scopeKey ] = {};
+        return choicesMany( [ arguments ] )[ 1 ];
+    }
+
+    /** Batch the same recipient/type/scope reads without sharing a cache between callers. */
+    public array function choicesMany( required array requests ) {
+        var identities = [];
+        var positions = [];
+        var result = [];
+        for ( var inputRequest in arguments.requests ) {
+            var identity = recipient( inputRequest.notifiable );
+            validateKey( inputRequest.notificationType, 160 );
+            for ( var scopeKey in inputRequest.scopeKeys ) {
+                validateKey( scopeKey, 100 );
             }
-            lookup[ row.scopeKey ][ row.channel ] = row.choice;
+            result.append( [] );
+            if ( !inputRequest.scopeKeys.isEmpty() ) {
+                identity[ "notificationType" ] = inputRequest.notificationType;
+                identity[ "scopeKey" ] = inputRequest.scopeKeys;
+                identities.append( identity );
+                positions.append( result.len() );
+            }
         }
-        return arguments.scopeKeys.map( ( key ) => {
-            return { "key": key, "choices": duplicate( lookup[ key ] ?: {} ) };
-        } );
+        var records = new megaphone.models.Storage.BulkRecords().read( () => newPreferenceQuery(), identities );
+        for ( var index = 1; index <= positions.len(); index++ ) {
+            var lookup = {};
+            for ( var row in records[ index ] ) {
+                if ( !structKeyExists( lookup, row.scopeKey ) ) {
+                    lookup[ row.scopeKey ] = {};
+                }
+                lookup[ row.scopeKey ][ row.channel ] = row.choice;
+            }
+            result[ positions[ index ] ] = arguments.requests[ positions[ index ] ].scopeKeys.map( ( key ) => {
+                return { "key": key, "choices": duplicate( lookup[ key ] ?: {} ) };
+            } );
+        }
+        return result;
+    }
+
+    /** Ordered configurations use the same defaults, scope precedence and validation as scalar resolution. */
+    public array function configurationMany( required array requests ) {
+        var choices = choicesMany( arguments.requests );
+        var result = [];
+        for ( var index = 1; index <= arguments.requests.len(); index++ ) {
+            var scopes = choices[ index ];
+            result.append( {
+                "scopes": scopes,
+                "effective": variables.resolver.resolve( arguments.requests[ index ].defaults, scopes )
+            } );
+        }
+        return result;
     }
 
     /**

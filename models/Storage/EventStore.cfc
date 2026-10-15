@@ -27,6 +27,57 @@ component accessors="true" {
         date createdDate = now(),
         string notificationMapping = ""
     ) {
+        return recordMany( [ arguments ] )[ 1 ];
+    }
+
+    /** Records a batch in one caller transaction; identical replays never replace snapshots. */
+    public array function recordMany( required array events ) {
+        var prepared = arguments.events.map( ( event ) => prepareEvent( argumentCollection = event ) );
+        var result = [];
+        if ( prepared.isEmpty() ) {
+            return result;
+        }
+        var bulk = new megaphone.models.Storage.BulkRecords();
+        var size = bulk.insertSize( prepared[ 1 ].values );
+        transaction {
+            try {
+                for ( var offset = 1; offset <= prepared.len(); offset += size ) {
+                    var batch = prepared.slice( offset, min( size, prepared.len() - offset + 1 ) );
+                    newEventQuery().insertIgnore( batch.map( ( entry ) => entry.values ) );
+                    var records = bulk.read( () => newEventQuery(), batch.map( ( entry ) => entry.identity ) );
+                    for ( var index = 1; index <= batch.len(); index++ ) {
+                        var stored = records[ index ][ 1 ];
+                        if (
+                            stored.type != batch[ index ].values.type || stored.payloadHash != batch[ index ].values.payloadHash
+                        ) {
+                            throw(
+                                type = "Megaphone.Events.IdentityConflict",
+                                message = "An event identity already refers to different content."
+                            );
+                        }
+                        stored.payload = deserializeJSON( stored.payload );
+                        stored.created = stored.id == batch[ index ].values.id;
+                        result.append( stored );
+                    }
+                }
+            } catch ( any error ) {
+                transactionRollback();
+                rethrow;
+            }
+        }
+        return result;
+    }
+
+    private struct function prepareEvent(
+        required string namespace,
+        required string eventKey,
+        required numeric version,
+        required string type,
+        required struct payload,
+        required string payloadHash,
+        date createdDate = now(),
+        string notificationMapping = ""
+    ) {
         if (
             !len( trim( arguments.namespace ) ) || !len( trim( arguments.eventKey ) ) ||
             !len( trim( arguments.type ) ) || !len( trim( arguments.payloadHash ) ) ||
@@ -55,22 +106,7 @@ component accessors="true" {
                 "cfsqltype": "varchar"
             }
         } );
-        newEventQuery().insertIgnore( values );
-        var rows = newEventQuery()
-            .where( "namespace", identity.namespace )
-            .where( "eventKey", identity.eventKey )
-            .where( "version", identity.version )
-            .get();
-        var stored = rows[ 1 ];
-        if ( stored.type != arguments.type || stored.payloadHash != arguments.payloadHash ) {
-            throw(
-                type = "Megaphone.Events.IdentityConflict",
-                message = "An event identity already refers to different content."
-            );
-        }
-        stored.payload = deserializeJSON( stored.payload );
-        stored[ "created" ] = stored.id == values.id;
-        return stored;
+        return { "identity": identity, "values": values };
     }
 
     /**
