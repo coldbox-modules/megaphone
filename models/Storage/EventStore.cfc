@@ -37,7 +37,7 @@ component accessors="true" {
 
     /** Explicit no-result admission; custom stores and unsupported builders retain their public batch override. */
     public array function recordReferences( required array events ) {
-        var bulk = new megaphone.models.Storage.BulkRecords();
+        var bulk = new megaphone.models.Storage.StockReferenceRecords();
         if (
             !bulk.isStockComponent( this, "megaphone.models.Storage.EventStore" ) || !bulk.supportsReturning(
                 newQueryBuilder()

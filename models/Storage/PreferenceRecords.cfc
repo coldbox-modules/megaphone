@@ -23,45 +23,12 @@ component {
             ) ||
             !variables.sources.hasIdentityColumnFormatter( query )
         ) {
-            var typedIdentities = arguments.identities.map( ( identity ) => {
-                return {
-                    "recipientType": {
-                        "value": identity.recipientType,
-                        "cfsqltype": "varchar",
-                        "null": false,
-                        "list": false
-                    },
-                    "recipientId": {
-                        "value": identity.recipientId,
-                        "cfsqltype": "varchar",
-                        "null": false,
-                        "list": false
-                    },
-                    "notificationType": {
-                        "value": identity.notificationType,
-                        "cfsqltype": "varchar",
-                        "null": false,
-                        "list": false
-                    },
-                    "scopeKey": identity.scopeKey.map( ( key ) => {
-                        return {
-                            "value": key,
-                            "cfsqltype": "varchar",
-                            "null": false,
-                            "list": false
-                        };
-                    } )
-                };
-            } );
-            var first = true;
-            return new megaphone.models.Storage.BulkRecords().read(
-                () => {
-                    var next = first ? query : queryFactory();
-                    first = false;
-                    return next.from( tableName ).mergeDefaultOptions( queryOptions );
-                },
-                typedIdentities,
-                arguments.tableName
+            return new megaphone.models.Storage.BulkRecords().readPreferencesFallback(
+                queryFactory = arguments.queryFactory,
+                identities = arguments.identities,
+                tableName = arguments.tableName,
+                queryOptions = arguments.queryOptions,
+                firstQuery = query
             );
         }
         var grammar = query.getGrammar();
@@ -88,7 +55,7 @@ component {
                 }
                 if ( len( encoded ) > 1048576 ) {
                     var remaining = arguments.identities.slice( offset );
-                    var fallback = readPreferencesFallback(
+                    var fallback = new megaphone.models.Storage.BulkRecords().readPreferencesFallback(
                         arguments.queryFactory,
                         remaining,
                         arguments.tableName,
@@ -137,49 +104,6 @@ component {
             offset += rows.len();
         }
         return result;
-    }
-
-    private array function readPreferencesFallback(
-        required any queryFactory,
-        required array identities,
-        required string tableName,
-        required struct queryOptions
-    ) {
-        var typed = arguments.identities.map( ( identity ) => {
-            return {
-                "recipientType": {
-                    "value": identity.recipientType,
-                    "cfsqltype": "varchar",
-                    "null": false,
-                    "list": false
-                },
-                "recipientId": {
-                    "value": identity.recipientId,
-                    "cfsqltype": "varchar",
-                    "null": false,
-                    "list": false
-                },
-                "notificationType": {
-                    "value": identity.notificationType,
-                    "cfsqltype": "varchar",
-                    "null": false,
-                    "list": false
-                },
-                "scopeKey": identity.scopeKey.map( ( key ) => {
-                    return {
-                        "value": key,
-                        "cfsqltype": "varchar",
-                        "null": false,
-                        "list": false
-                    };
-                } )
-            };
-        } );
-        return new megaphone.models.Storage.BulkRecords().read(
-            () => queryFactory().from( tableName ).mergeDefaultOptions( queryOptions ),
-            typed,
-            arguments.tableName
-        );
     }
 
 }

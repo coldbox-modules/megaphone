@@ -49,6 +49,44 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                 expect( sources.isStockComponent( variables.events, "tests.resources.DoesNotExistSource" ) ).toBeFalse();
                 expect( sources.isStockComponent( variables.events, "megaphone.models.Storage.EventStore" ) ).toBeTrue();
             } );
+            it( "loads generic reference machinery only when a stock replay needs a lookup", () => {
+                if ( !variables.fast ) {
+                    expect( variables.events.recordReferences( [ eventInput( createUUID() ) ] )[ 1 ].created ).toBeTrue();
+                    return;
+                }
+                var executor = new megaphone.models.Storage.StockReferenceRecords();
+                var typed = referenceRows( 1 )[ 1 ];
+                var row = {};
+                for ( var name in typed ) {
+                    row[ name ] = name == "notificationMapping" ? typed[ name ] : typed[ name ].value;
+                }
+                var options = {
+                    "store": variables.events,
+                    "types": {
+                        "id": "varchar",
+                        "namespace": "varchar",
+                        "eventKey": "varchar",
+                        "version": "integer",
+                        "type": "varchar",
+                        "payloadHash": "varchar",
+                        "payload": "varchar",
+                        "createdDate": "timestamp",
+                        "notificationMapping": "varchar"
+                    },
+                    "values": [ row ],
+                    "identities": [ { "namespace": row.namespace, "eventKey": row.eventKey, "version": row.version } ],
+                    "columns": [ "id", "type", "payloadHash" ],
+                    "queryFactory": () => referenceQuery(),
+                    "tableName": "megaphone_events"
+                };
+                var fresh = executor.insertStockReferences( argumentCollection = options, query = referenceQuery() );
+                expect( fresh[ 1 ][ 1 ].id ).toBe( row.id );
+                expect( getProperty( target = executor, name = "fallbackRecords", defaultValue = false ) ).toBeFalse();
+                var replay = executor.insertStockReferences( argumentCollection = options, query = referenceQuery() );
+                expect( replay[ 1 ][ 1 ].id ).toBe( row.id );
+                expect( isObject( getProperty( executor, "fallbackRecords" ) ) ).toBeTrue();
+                expect( variables.events.find( row.id ).payloadHash ).toBe( row.payloadHash );
+            } );
             it( "recognizes the exact stock source through mapping aliases while retaining real admission", () => {
                 var bulk = new megaphone.models.Storage.BulkRecords();
                 var queryAlias = new qbStockAlias.models.Query.QueryBuilder( grammar = variables.grammar );
