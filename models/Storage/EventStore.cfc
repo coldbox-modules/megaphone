@@ -49,16 +49,17 @@ component accessors="true" {
                     return { "id": row.id, "created": row.created };
                 } );
         }
-        return writeEvents( arguments.events, true );
+        return writeEvents( arguments.events, true, bulk );
     }
 
-    private array function writeEvents( required array events, boolean referencesOnly = false ) {
+    private array function writeEvents( required array events, boolean referencesOnly = false, any bulkRecords ) {
         var prepared = arguments.events.map( ( event ) => prepareEvent( argumentCollection = event ) );
         var result = [];
         if ( prepared.isEmpty() ) {
             return result;
         }
-        var bulk = new megaphone.models.Storage.BulkRecords();
+        var bulk = isNull( arguments.bulkRecords ) ? new megaphone.models.Storage.BulkRecords() : arguments.bulkRecords;
+        var referenceTemplates = {};
         var size = arguments.referencesOnly ? max( 1, min( 1000, int( 30000 / structCount( prepared[ 1 ].values ) ) ) ) : bulk.insertSize(
             prepared[ 1 ].values
         );
@@ -88,7 +89,8 @@ component accessors="true" {
                             identities = batch.map( ( entry ) => entry.identity ),
                             columns = [ "id", "type", "payloadHash" ],
                             queryFactory = () => newEventQuery(),
-                            tableName = getTableName()
+                            tableName = getTableName(),
+                            templates = referenceTemplates
                         );
                     } else {
                         newEventQuery().insertIgnore( insertValues );

@@ -55,16 +55,17 @@ component accessors="true" {
                     };
                 } );
         }
-        return writeDeliveries( arguments.intents, true );
+        return writeDeliveries( arguments.intents, true, bulk );
     }
 
-    private array function writeDeliveries( required array intents, boolean referencesOnly = false ) {
+    private array function writeDeliveries( required array intents, boolean referencesOnly = false, any bulkRecords ) {
         var prepared = arguments.intents.map( ( intent ) => prepareDelivery( argumentCollection = intent ) );
         var result = [];
         if ( prepared.isEmpty() ) {
             return result;
         }
-        var bulk = new megaphone.models.Storage.BulkRecords();
+        var bulk = isNull( arguments.bulkRecords ) ? new megaphone.models.Storage.BulkRecords() : arguments.bulkRecords;
+        var referenceTemplates = {};
         var size = arguments.referencesOnly ? max( 1, min( 1000, int( 30000 / structCount( prepared[ 1 ].values ) ) ) ) : bulk.insertSize(
             prepared[ 1 ].values
         );
@@ -104,7 +105,8 @@ component accessors="true" {
                                 "availableDate"
                             ],
                             queryFactory = () => newDeliveryQuery(),
-                            tableName = getTableName()
+                            tableName = getTableName(),
+                            templates = referenceTemplates
                         );
                     } else {
                         newDeliveryQuery().insertIgnore( insertValues );

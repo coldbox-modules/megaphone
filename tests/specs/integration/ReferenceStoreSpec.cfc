@@ -154,6 +154,118 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                         .count()
                 ).toBe( 0 );
             } );
+            it( "reuses public compiler tuples and exact typed bindings across heterogeneous rows and chunks", () => {
+                if ( !variables.fast ) {
+                    var reference = variables.events.recordReferences( [ eventInput( createUUID() ) ] )[ 1 ];
+                    expect( variables.counter.count ).toBeGT( 0 );
+                    expect( variables.events.find( reference.id ).payload.text ).toBe( "'quoted ?'" );
+                    return;
+                }
+                var rows = referenceRows( 101 );
+                var query = referenceQuery();
+                query.setCollectQueryLog( true );
+                var compiles = { "sizes": [] };
+                observeCompiler( query, compiles );
+                var templates = {};
+                var bulk = new megaphone.models.Storage.BulkRecords();
+                var admitted = insertReferenceRows( bulk, query, rows, templates );
+                expect( compiles.sizes ).toBe( [ 1, 2 ] );
+                expect( templates.count() ).toBe( 1 );
+                expect( admitted.len() ).toBe( rows.len() );
+                var expected = referenceQuery();
+                expected.returning( [ "id", "type", "payloadHash" ] );
+                expected.insertIgnore( values = rows, toSQL = true );
+                expect( query.getQueryLog()[ 1 ].bindings ).toBe( expected.getBindings() );
+                for ( var index = 1; index <= rows.len(); index++ ) {
+                    var stored = variables.events.find( admitted[ index ][ 1 ].id );
+                    expect( stored.eventKey ).toBe( rows[ index ].eventKey.value );
+                    expect( stored.payloadHash ).toBe( rows[ index ].payloadHash.value );
+                    expect( stored.payload.text ).toBe( "'quoted ?' OR true --" & index );
+                    expect( dateDiff( "l", stored.createdDate, rows[ index ].createdDate.value ) ).toBe( 0 );
+                    expect( stored.notificationMapping ?: "" ).toBe( rows[ index ].notificationMapping.value );
+                }
+                var next = referenceQuery();
+                observeCompiler( next, compiles );
+                var nextRows = referenceRows( 3 );
+                var nextResult = insertReferenceRows( bulk, next, nextRows, templates );
+                expect( nextResult.len() ).toBe( 3 );
+                expect( compiles.sizes ).toBe( [ 1, 2 ] );
+            } );
+            it( "retains full public compilation for unsupported metadata, expressions and custom formatters", () => {
+                if ( !variables.fast ) {
+                    var input = eventInput( createUUID() );
+                    var reference = variables.events.recordReferences( [ input ] )[ 1 ];
+                    expect( variables.events.recordReferences( [ input ] )[ 1 ].id ).toBe( reference.id );
+                    return;
+                }
+                var rows = referenceRows( 3 );
+                rows[ 2 ].payloadHash.maxlength = 100;
+                var query = referenceQuery();
+                rows[ 3 ].payloadHash = query.raw( "?", [ "expression-'? --" ] );
+                var compiles = { "sizes": [] };
+                observeCompiler( query, compiles );
+                var admitted = insertReferenceRows(
+                    new megaphone.models.Storage.BulkRecords(),
+                    query,
+                    rows,
+                    {}
+                );
+                expect( compiles.sizes ).toBe( [ 3 ] );
+                expect( variables.events.find( admitted[ 2 ][ 1 ].id ).payloadHash ).toBe( rows[ 2 ].payloadHash.value );
+                expect( variables.events.find( admitted[ 3 ][ 1 ].id ).payloadHash ).toBe( "expression-'? --" );
+                var formatted = referenceQuery();
+                formatted.setColumnFormatter( ( column ) => column );
+                var formattedCompiles = { "sizes": [] };
+                observeCompiler( formatted, formattedCompiles );
+                var formattedRows = referenceRows( 2 );
+                var formattedResult = insertReferenceRows(
+                    new megaphone.models.Storage.BulkRecords(),
+                    formatted,
+                    formattedRows,
+                    {}
+                );
+                expect( formattedCompiles.sizes ).toBe( [ 2 ] );
+                expect( variables.events.find( formattedResult[ 1 ][ 1 ].id ).eventKey ).toBe(
+                    formattedRows[ 1 ].eventKey.value
+                );
+                var varied = referenceQuery();
+                var variedCompiles = { "sizes": [] };
+                observeCompiler( varied, variedCompiles );
+                var variedRows = referenceRows( 2 );
+                variedRows[ 2 ].version.cfsqltype = "bigint";
+                var variedResult = insertReferenceRows(
+                    new megaphone.models.Storage.BulkRecords(),
+                    varied,
+                    variedRows,
+                    {}
+                );
+                expect( variedCompiles.sizes ).toBe( [ 2 ] );
+                expect( variables.events.find( variedResult[ 2 ][ 1 ].id ).version ).toBe( 2 );
+            } );
+            it( "preserves a custom QueryUtils per-value normalizer through the full compiler fallback", () => {
+                if ( !variables.fast ) {
+                    var reference = variables.events.recordReferences( [ eventInput( createUUID() ) ] )[ 1 ];
+                    expect( reference.created ).toBeTrue();
+                    expect( variables.counter.count ).toBeGT( 0 );
+                    return;
+                }
+                var query = referenceQuery();
+                query.setUtils( new tests.resources.ReferenceNormalizingQueryUtils() );
+                var rows = referenceRows( 3 );
+                rows[ 1 ].payloadHash.value = "normalize:first";
+                rows[ 2 ].payloadHash.value = "normalize:second";
+                var compiles = { "sizes": [] };
+                observeCompiler( query, compiles );
+                var admitted = insertReferenceRows(
+                    new megaphone.models.Storage.BulkRecords(),
+                    query,
+                    rows,
+                    {}
+                );
+                expect( compiles.sizes ).toBe( [ 3 ] );
+                expect( variables.events.find( admitted[ 1 ][ 1 ].id ).payloadHash ).toBe( "normalized:first" );
+                expect( variables.events.find( admitted[ 2 ][ 1 ].id ).payloadHash ).toBe( "normalized:second" );
+            } );
             it( "retains the generic insert and identity readback for a custom QueryBuilder subclass", () => {
                 variables.injector
                     .getBinder()
@@ -209,6 +321,71 @@ component extends="tests.resources.BulkNotificationSpecBase" {
             } );
         } );
     }
+    private any function referenceQuery() {
+        return variables.injector.getInstance( "QueryBuilder@qb" ).from( "megaphone_events" );
+    }
+    private void function observeCompiler( required any query, required struct counter ) {
+        arguments.query.megaphoneOriginalInsertIgnore = arguments.query.insertIgnore;
+        var target = arguments.query;
+        var counts = arguments.counter;
+        arguments.query.insertIgnore = function() {
+            counts.sizes.append( arguments.values.len() );
+            return target.megaphoneOriginalInsertIgnore( argumentCollection = arguments );
+        };
+    }
+    private array function referenceRows( required numeric count ) {
+        var rows = [];
+        var namespace = createUUID();
+        for ( var index = 1; index <= arguments.count; index++ ) {
+            rows.append( {
+                "id": createObject( "java", "java.util.UUID" ).randomUUID().toString(),
+                "namespace": namespace,
+                "eventKey": "quote-'? OR true --" & index,
+                "version": index,
+                "type": "notice",
+                "payloadHash": "hash-'? --" & index,
+                "payload": serializeJSON( { "text": "'quoted ?' OR true --" & index } ),
+                "createdDate": dateAdd( "l", index, createDateTime( 2026, 10, 15, 12, 13, 14 ) ),
+                "notificationMapping": {
+                    "value": index % 2 ? "" : "tests.resources.QueueNotification",
+                    "null": index % 2 == 1,
+                    "cfsqltype": "varchar"
+                }
+            } );
+        }
+        return new megaphone.models.Storage.BulkRecords().typedRows(
+            rows,
+            {
+                "id": "varchar",
+                "namespace": "varchar",
+                "eventKey": "varchar",
+                "version": "integer",
+                "type": "varchar",
+                "payloadHash": "varchar",
+                "payload": "varchar",
+                "createdDate": "timestamp"
+            }
+        );
+    }
+    private array function insertReferenceRows(
+        required any bulk,
+        required any query,
+        required array rows,
+        required struct templates
+    ) {
+        return arguments.bulk.insertReferences(
+            query = arguments.query,
+            values = arguments.rows,
+            identities = arguments.rows.map( ( row ) => {
+                return { "namespace": row.namespace, "eventKey": row.eventKey, "version": row.version };
+            } ),
+            columns = [ "id", "type", "payloadHash" ],
+            queryFactory = () => referenceQuery(),
+            tableName = "megaphone_events",
+            templates = arguments.templates
+        );
+    }
+
     private struct function eventInput( required string key ) {
         return {
             "namespace": "references",
