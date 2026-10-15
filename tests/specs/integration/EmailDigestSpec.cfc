@@ -645,6 +645,24 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                 }
                 expect( variables.mail.getSent() ).toBeEmpty();
             } );
+            it( "admitPlans retains collection admission and replay even with a reference-capable adapter", () => {
+                var queue = new tests.resources.BulkReferenceQueueFixture();
+                variables.injector.getInstance( "NotificationRuntime@megaphone" ).setQueueAdapter( queue );
+                var plan = variables.notifications.plan(
+                    variables.owner,
+                    new tests.resources.DigestNotificationFixture(),
+                    item( "reference-fallback-collected" ),
+                    { "eventKey": createUUID() }
+                );
+                variables.notifications.admitPlans( [ plan ] );
+                var replay = variables.notifications.queuePlan( plan );
+                expect( replay.getCollections().len() ).toBe( 1 );
+                expect( replay.getCollections()[ 1 ].status ).toBe( "collected" );
+                expect( replay.getCollections()[ 1 ].created ).toBeFalse();
+                expect( queue.getReferences() ).toBeEmpty();
+                expect( queue.getDeliveries() ).toBeEmpty();
+                expect( variables.mail.getSent() ).toBeEmpty();
+            } );
             it( "queuePlan returns collection independently of delivered email and deduplicates event replays", () => {
                 // Admit now into a future schedule; no queue adapter or provider send is involved.
                 var plan = variables.notifications.plan(

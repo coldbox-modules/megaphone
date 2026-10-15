@@ -246,6 +246,122 @@ component singleton accessors="true" {
         return plans;
     }
 
+    /**
+     * Admits saved plans without constructing result models when the adapter accepts references.
+     * Existing model-based admission remains the fallback for legacy adapters and collections.
+     */
+    public void function admitPlans(
+        required array plans,
+        boolean alreadyAdmitted = false,
+        string connection,
+        string queue
+    ) {
+        if ( arguments.plans.isEmpty() ) {
+            return;
+        }
+        var runtime = newNotificationRuntime();
+        var settings = runtime.getSettings();
+        var adapter = runtime.resolve( "queueAdapter" );
+        var fallback = isNull( adapter ) || !isCustomFunction( adapter.enqueueReferencesMany ?: "" ) ||
+        ( structKeyExists( settings, "digests" ) && !structIsEmpty( settings.digests ) );
+        var captures = arguments.plans.map( ( plan ) => plan.getMemento() );
+        for ( var captured in captures ) {
+            for ( var intent in captured.deliveries ) {
+                fallback = fallback || ( intent.collection ?: false ) || structKeyExists(
+                    intent.routingData,
+                    "emailDigest"
+                );
+            }
+        }
+        if ( fallback ) {
+            queuePlans( argumentCollection = arguments );
+            return;
+        }
+        transaction {
+            try {
+                var active = [];
+                var ordinals = [];
+                for ( var index = 1; index <= captures.len(); index++ ) {
+                    var captured = captures[ index ];
+                    if (
+                        !arguments.alreadyAdmitted && !isNull( captured.admitAfter ) &&
+                        dateCompare( captured.event.createdDate, captured.admitAfter ) < 0
+                    ) {
+                        continue;
+                    }
+                    active.append( captured.event );
+                    ordinals.append( index );
+                }
+                if ( active.isEmpty() ) {
+                    return;
+                }
+                var events = newEventStore().recordMany( active );
+                var intents = [];
+                var optionsByIntent = [];
+                for ( var index = 1; index <= events.len(); index++ ) {
+                    if ( !events[ index ].created ) {
+                        continue;
+                    }
+                    var options = arguments.plans[ ordinals[ index ] ].getQueueOptions();
+                    for ( var key in [ "connection", "queue" ] ) {
+                        if ( !isNull( arguments[ key ] ) ) {
+                            options[ key ] = arguments[ key ];
+                        }
+                    }
+                    for ( var intent in captures[ ordinals[ index ] ].deliveries ) {
+                        if ( !structKeyExists( intent, "enabled" ) || !isBoolean( intent.enabled ) ) {
+                            throw(
+                                type = "Megaphone.Delivery.InvalidIntent",
+                                message = "Every delivery needs an explicit channel choice."
+                            );
+                        }
+                        var values = duplicate( intent );
+                        var names = {
+                            "notifiableType": "recipientType",
+                            "notifiableId": "recipientId",
+                            "channelName": "channel"
+                        };
+                        for ( var name in names ) {
+                            if ( structKeyExists( values, name ) ) {
+                                values[ names[ name ] ] = values[ name ];
+                                structDelete( values, name );
+                            }
+                        }
+                        values.eventId = events[ index ].id;
+                        values.initialState = intent.enabled ? "queued" : "suppressed";
+                        intents.append( values );
+                        optionsByIntent.append( options );
+                    }
+                }
+                var deliveries = newDeliveryStore().enqueueMany( intents );
+                var groups = {};
+                for ( var index = 1; index <= deliveries.len(); index++ ) {
+                    var delivery = deliveries[ index ];
+                    if ( !delivery.created || delivery.state != "queued" ) {
+                        continue;
+                    }
+                    var options = optionsByIntent[ index ];
+                    var groupKey = hash(
+                        serializeJSON( [ options.connection ?: javacast( "null", "" ), options.queue ?: javacast( "null", "" ) ] ),
+                        "SHA-256"
+                    );
+                    if ( !structKeyExists( groups, groupKey ) ) {
+                        groups[ groupKey ] = { "options": options, "references": [] };
+                    }
+                    groups[ groupKey ].references.append( { "id": delivery.id, "state": delivery.state, "availableDate": delivery.availableDate } );
+                }
+                for ( var key in groups ) {
+                    var enqueueArguments = duplicate( groups[ key ].options );
+                    enqueueArguments.references = groups[ key ].references;
+                    adapter.enqueueReferencesMany( argumentCollection = enqueueArguments );
+                }
+            } catch ( any error ) {
+                transactionRollback();
+                rethrow;
+            }
+        }
+    }
+
     /** All plans share one publication transaction, including legacy adapter and digest fallbacks. */
     public array function queuePlans(
         required array plans,
@@ -593,6 +709,12 @@ component singleton accessors="true" {
      * @returns any
      */
     private any function newDeliveryService() provider="NotificationDeliveryService@megaphone" {
+    }
+
+    /** Configured stores retain identity conflicts and caller-transaction behavior for no-result admission. */
+    private any function newEventStore() provider="EventStore@megaphone" {
+    }
+    private any function newDeliveryStore() provider="DeliveryStore@megaphone" {
     }
 
     /**
