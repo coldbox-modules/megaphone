@@ -413,6 +413,11 @@ component singleton accessors="true" {
                  : eventStore.recordMany( active );
                 var intents = [];
                 var optionsByIntent = [];
+                var names = {
+                    "notifiableType": "recipientType",
+                    "notifiableId": "recipientId",
+                    "channelName": "channel"
+                };
                 for ( var index = 1; index <= events.len(); index++ ) {
                     if ( !events[ index ].created ) {
                         continue;
@@ -423,6 +428,7 @@ component singleton accessors="true" {
                             options[ key ] = arguments[ key ];
                         }
                     }
+                    var optionContext = { "options": options };
                     for ( var intent in captures[ ordinals[ index ] ].deliveries ) {
                         if ( !structKeyExists( intent, "enabled" ) || !isBoolean( intent.enabled ) ) {
                             throw(
@@ -431,11 +437,6 @@ component singleton accessors="true" {
                             );
                         }
                         var values = duplicate( intent );
-                        var names = {
-                            "notifiableType": "recipientType",
-                            "notifiableId": "recipientId",
-                            "channelName": "channel"
-                        };
                         for ( var name in names ) {
                             if ( structKeyExists( values, name ) ) {
                                 values[ names[ name ] ] = values[ name ];
@@ -445,7 +446,7 @@ component singleton accessors="true" {
                         values.eventId = events[ index ].id;
                         values.initialState = intent.enabled ? "queued" : "suppressed";
                         intents.append( values );
-                        optionsByIntent.append( options );
+                        optionsByIntent.append( optionContext );
                     }
                 }
                 var deliveryStore = newDeliveryStore();
@@ -458,11 +459,15 @@ component singleton accessors="true" {
                     if ( !delivery.created || delivery.state != "queued" ) {
                         continue;
                     }
-                    var options = optionsByIntent[ index ];
-                    var groupKey = hash(
-                        serializeJSON( [ options.connection ?: javacast( "null", "" ), options.queue ?: javacast( "null", "" ) ] ),
-                        "SHA-256"
-                    );
+                    var optionContext = optionsByIntent[ index ];
+                    var options = optionContext.options;
+                    if ( !structKeyExists( optionContext, "groupKey" ) ) {
+                        optionContext.groupKey = hash(
+                            serializeJSON( [ options.connection ?: javacast( "null", "" ), options.queue ?: javacast( "null", "" ) ] ),
+                            "SHA-256"
+                        );
+                    }
+                    var groupKey = optionContext.groupKey;
                     if ( !structKeyExists( groups, groupKey ) ) {
                         groups[ groupKey ] = { "options": options, "references": [] };
                     }

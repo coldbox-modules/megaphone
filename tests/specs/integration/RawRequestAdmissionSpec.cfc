@@ -45,6 +45,47 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                 expect( variables.adapter.getReferences().len() ).toBe( 202 );
                 expect( variables.deliveries.forEvent( first.eventId ).len() ).toBe( 3 );
             } );
+            it( "keeps per-event custom queue groups, defaults, suppression and replay isolated", () => {
+                var inputs = [];
+                for ( var index = 1; index <= 5; index++ ) {
+                    inputs.append( notificationRequest( createUUID() ) );
+                }
+                for ( var index in [ 1, 2 ] ) {
+                    inputs[ index ].connection = "one";
+                    inputs[ index ].queue = "Priority";
+                }
+                inputs[ 3 ].connection = "two";
+                inputs[ 3 ].queue = "priority";
+                inputs[ 5 ].connection = "ignored";
+                inputs[ 5 ].queue = "suppressed";
+                inputs[ 5 ].properties.choices = { "database": false, "email": false, "push": false };
+                variables.service.admitRequests( inputs );
+                var batches = variables.adapter.getReferenceBatches();
+                expect( batches.len() ).toBe( 3 );
+                expect( variables.adapter.getReferences().len() ).toBe( 8 );
+                var total = 0;
+                for ( var batch in batches ) {
+                    expect( batch.argumentNames ).notToInclude( "groupkey" );
+                    expect( batch.references.every( ( reference ) => reference.state == "queued" ) ).toBeTrue();
+                    if ( structIsEmpty( batch.options ) ) {
+                        expect( batch.references.len() ).toBe( 2 );
+                        expect( batch.argumentNames ).toBe( [ "connection", "queue", "references" ] );
+                    } else if ( compare( batch.options.queue, "Priority" ) == 0 ) {
+                        expect( batch.options.connection ).toBe( "one" );
+                        expect( batch.references.len() ).toBe( 4 );
+                        expect( batch.argumentNames ).toBe( [ "connection", "queue", "references" ] );
+                    } else {
+                        expect( compare( batch.options.queue, "priority" ) ).toBe( 0 );
+                        expect( batch.options.connection ).toBe( "two" );
+                        expect( batch.references.len() ).toBe( 2 );
+                    }
+                    total += batch.references.len();
+                }
+                expect( total ).toBe( 8 );
+                variables.service.admitRequests( inputs );
+                expect( variables.adapter.getReferenceBatches().len() ).toBe( 3 );
+                expect( variables.adapter.getReferences().len() ).toBe( 8 );
+            } );
             it( "retains per-request transient snapshotter resolution in both batch APIs", () => {
                 var counter = { "instances": [] };
                 variables.injector
