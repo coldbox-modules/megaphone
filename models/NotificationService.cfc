@@ -147,6 +147,12 @@ component singleton accessors="true" {
             for ( var channelName in channelNames ) {
                 var channel = getChannel( channelName );
                 var collects = isCustomFunction( channel.supportsCollection ?: "" ) && channel.supportsCollection();
+                if ( collects && ( arguments.options.rejectCollections ?: false ) ) {
+                    throw(
+                        type = "Megaphone.Digests.RecursiveCollection",
+                        message = "A generated digest summary cannot route into a collection channel."
+                    );
+                }
                 if (
                     !collects && (
                         !isCustomFunction( channel.prepareDelivery ?: "" ) || !isCustomFunction(
@@ -690,6 +696,9 @@ component singleton accessors="true" {
                 }
                 var deliveries = [];
                 var collections = [];
+                if ( captured.deliveries.some( ( intent ) => intent.collection ?: false ) ) {
+                    newDigestService().lockCollections( captured.deliveries );
+                }
                 for ( var intent in captured.deliveries ) {
                     if ( structKeyExists( intent, "collection" ) && intent.collection ) {
                         var channel = getChannel( intent.channelName );

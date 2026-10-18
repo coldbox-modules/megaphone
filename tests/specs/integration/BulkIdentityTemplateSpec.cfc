@@ -68,7 +68,8 @@ component extends="tests.specs.integration.EventStoreSpec" {
                 expect( rows[ 2 ][ 1 ].id ).toBe( second.id );
                 expect( rows[ 3 ][ 1 ].id ).toBe( first.id );
                 expect( rows[ 10 ][ 1 ].id ).toBe( third.id );
-                expect( rows[ 5 ].map( ( row ) => row.id ).sort( "text" ) ).toBe( [ first.id, third.id ].sort( "text" ) );
+                var expectedIds = [ first.id, third.id ];
+                expect( rows[ 5 ].map( ( row ) => row.id ).sort( "text" ) ).toBe( expectedIds.sort( "text" ) );
             } );
         } );
     }

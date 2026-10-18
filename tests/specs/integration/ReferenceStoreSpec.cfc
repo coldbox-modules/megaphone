@@ -90,8 +90,12 @@ component extends="tests.resources.BulkNotificationSpecBase" {
             it( "recognizes the exact stock source through mapping aliases while retaining real admission", () => {
                 var bulk = new megaphone.models.Storage.BulkRecords();
                 var queryAlias = new qbStockAlias.models.Query.QueryBuilder( grammar = variables.grammar );
-                expect( getMetadata( queryAlias ).name ).notToBe(
-                    getMetadata( variables.injector.getInstance( "QueryBuilder@qb" ) ).name
+                // Adobe canonicalizes metadata names for aliases; physical stock ownership is the contract.
+                expect( bulk.isStockComponent( queryAlias, "qb.models.Query.QueryBuilder" ) ).toBeTrue(
+                    serializeJSON( {
+                        "actual": getMetadata( queryAlias ).path,
+                        "expected": expandPath( "/qb/models/Query/QueryBuilder.cfc" )
+                    } )
                 );
                 expect( bulk.supportsReturning( queryAlias ) ).toBe( variables.fast );
                 var eventAlias = variables.injector.getInstance( "megaphoneStockAlias.models.Storage.EventStore" );
@@ -153,7 +157,7 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                     ] );
                     expect( work.created ).toBeTrue();
                     expect( work.state ).toBe( "queued" );
-                    expect( dateDiff( "l", work.availableDate, intents[ 1 ].availableDate ) ).toBe( 0 );
+                    expect( millisecondsBetween( work.availableDate, intents[ 1 ].availableDate ) ).toBe( 0 );
                 }
             } );
             it( "resolves duplicate and replayed identities across chunks while retaining conflicts and narrow reads", () => {
@@ -227,7 +231,7 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                     expect( stored.eventKey ).toBe( rows[ index ].eventKey.value );
                     expect( stored.payloadHash ).toBe( rows[ index ].payloadHash.value );
                     expect( stored.payload.text ).toBe( "'quoted ?' OR true --" & index );
-                    expect( dateDiff( "l", stored.createdDate, rows[ index ].createdDate.value ) ).toBe( 0 );
+                    expect( millisecondsBetween( stored.createdDate, rows[ index ].createdDate.value ) ).toBe( 0 );
                     expect( stored.notificationMapping ?: "" ).toBe( rows[ index ].notificationMapping.value );
                 }
                 var next = referenceQuery();
@@ -303,7 +307,7 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                     var stored = variables.events.find( admitted[ index ][ 1 ].id );
                     expect( stored.eventKey ).toBe( rows[ index ].eventKey );
                     expect( stored.notificationMapping ?: "" ).toBe( rows[ index ].notificationMapping.value );
-                    expect( dateDiff( "l", stored.createdDate, rows[ index ].createdDate ) ).toBe( 0 );
+                    expect( millisecondsBetween( stored.createdDate, rows[ index ].createdDate ) ).toBe( 0 );
                 }
                 var untrusted = referenceRows( 3 );
                 untrusted[ 2 ].payloadHash.maxlength = 100;
@@ -478,9 +482,16 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                 var old = dateAdd( "d", -30, now() );
                 var input = eventInput( createUUID() );
                 input.createdDate = supplied;
+                // Retain fractional input while respecting the event column's database precision.
+                var scalarInput = duplicate( input );
+                scalarInput.namespace = createUUID();
+                var expectedDate = variables.events.record( argumentCollection = scalarInput ).createdDate;
+                if ( variables.isPostgres ) {
+                    expect( millisecondsBetween( expectedDate, supplied ) ).toBe( 0 );
+                }
                 input.preparation = { "references": true, "auditClock": old };
                 var event = variables.events.recordReferences( [ input ] )[ 1 ];
-                expect( dateDiff( "l", variables.events.find( event.id ).createdDate, supplied ) ).toBe( 0 );
+                expect( millisecondsBetween( variables.events.find( event.id ).createdDate, expectedDate ) ).toBe( 0 );
                 expect( variables.events.recordReferences( [ input ] )[ 1 ].created ).toBeFalse();
                 var intents = [];
                 for ( var channel in [ "database", "email", "push" ] ) {
@@ -496,13 +507,13 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                 var after = now();
                 var rows = references.map( ( item ) => variables.deliveries.find( item.id ) );
                 for ( var row in rows ) {
-                    expect( dateDiff( "l", row.availableDate, supplied ) ).toBe( 0 );
+                    expect( millisecondsBetween( row.availableDate, supplied ) ).toBe( 0 );
                     expect( dateCompare( row.createdDate, before ) >= 0 && dateCompare( row.createdDate, after ) <= 0 ).toBeTrue();
                     if ( variables.fast ) {
-                        expect( dateDiff( "l", row.createdDate, rows[ 1 ].createdDate ) ).toBe( 0 );
-                        expect( dateDiff( "l", row.updatedDate, rows[ 1 ].createdDate ) ).toBe( 0 );
+                        expect( millisecondsBetween( row.createdDate, rows[ 1 ].createdDate ) ).toBe( 0 );
+                        expect( millisecondsBetween( row.updatedDate, rows[ 1 ].createdDate ) ).toBe( 0 );
                         if ( row.state == "suppressed" ) {
-                            expect( dateDiff( "l", row.settledDate, rows[ 1 ].createdDate ) ).toBe( 0 );
+                            expect( millisecondsBetween( row.settledDate, rows[ 1 ].createdDate ) ).toBe( 0 );
                         }
                     }
                 }
@@ -510,14 +521,14 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                 expect( replay.every( ( item ) => !item.created ) ).toBeTrue();
                 for ( var index = 1; index <= replay.len(); index++ ) {
                     var stored = variables.deliveries.find( replay[ index ].id );
-                    expect( dateDiff( "l", stored.createdDate, rows[ index ].createdDate ) ).toBe( 0 );
-                    expect( dateDiff( "l", stored.updatedDate, rows[ index ].updatedDate ) ).toBe( 0 );
+                    expect( millisecondsBetween( stored.createdDate, rows[ index ].createdDate ) ).toBe( 0 );
+                    expect( millisecondsBetween( stored.updatedDate, rows[ index ].updatedDate ) ).toBe( 0 );
                 }
                 var full = duplicate( intents[ 1 ] );
                 full.recipientId = createUUID();
                 var fullWork = variables.deliveries.enqueueMany( [ full ] )[ 1 ];
                 expect( dateCompare( fullWork.createdDate, before ) >= 0 ).toBeTrue();
-                expect( dateDiff( "l", fullWork.availableDate, supplied ) ).toBe( 0 );
+                expect( millisecondsBetween( fullWork.availableDate, supplied ) ).toBe( 0 );
                 var conflict = duplicate( intents[ 1 ] );
                 conflict.routingHash = "different";
                 expect( () => variables.deliveries.enqueueReferences( [ conflict ] ) ).toThrow( "Megaphone.Delivery.IdentityConflict" );
@@ -664,6 +675,10 @@ component extends="tests.resources.BulkNotificationSpecBase" {
             .getBinder()
             .map( "DeliveryStore@megaphone" )
             .to( "megaphone.models.Storage.DeliveryStore" );
+    }
+
+    private numeric function millisecondsBetween( required date start, required date finish ) {
+        return parseDateTime( arguments.finish ).getTime() - parseDateTime( arguments.start ).getTime();
     }
 
 }

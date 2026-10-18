@@ -452,7 +452,7 @@ component accessors="true" {
                 .update( {
                     "state": "queued",
                     "recoveryAllowance": row.recoveryAllowance + arguments.additionalAttempts,
-                    "availableDate": available,
+                    "availableDate": timestamp( available ),
                     "updatedDate": arguments.clock,
                     "reason": textBinding( "operator-recovery" ),
                     "leaseToken": textBinding( "" ),

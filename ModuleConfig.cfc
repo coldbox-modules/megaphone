@@ -67,10 +67,19 @@ component {
                 .to( moduleMapping & ".models.Storage." & stores[ key ] )
                 .initArg( name = "properties", value = properties );
         }
+        // Register aliases after module model discovery so scanning cannot replace them.
+        binder
+            .map( "DigestService@megaphone" )
+            .to( moduleMapping & ".models.Digests.DigestService" )
+            .asSingleton();
+        binder.map( "EmailDigestService@megaphone" ).toDSL( "DigestService@megaphone" );
         variables.wirebox.getInstance( "NotificationService@megaphone" ).registerChannels( settings.channels ?: {} );
         variables.wirebox
             .getInstance( "NotificationService@megaphone" )
-            .registerChannels( { "emailDigestBatch": { "provider": "EmailDigestBatchProvider@megaphone", "properties": {} } } );
+            .registerChannels( {
+                "emailDigestBatch": { "provider": "EmailDigestBatchProvider@megaphone", "properties": {} },
+                "digestBatch": { "provider": "DigestBatchProvider@megaphone", "properties": {} }
+            } );
     }
 
 }

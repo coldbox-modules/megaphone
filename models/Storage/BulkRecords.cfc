@@ -352,12 +352,12 @@ component {
         required array columns,
         struct stockTypes = {}
     ) {
-        var values = arguments.stockTypes.isEmpty() ? arguments.values : typedRows(
+        var insertValues = arguments.stockTypes.isEmpty() ? arguments.values : typedRows(
             arguments.values,
             arguments.stockTypes
         );
         arguments.query.returning( arguments.columns );
-        var sql = arguments.query.insertIgnore( values = values, toSQL = true );
+        var sql = arguments.query.insertIgnore( values = insertValues, toSQL = true );
         return { "sql": sql, "bindings": arguments.query.getBindings() };
     }
 

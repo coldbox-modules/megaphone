@@ -9,6 +9,8 @@ Megaphone requires JDK 11 or newer, ColdBox 6+, and Adobe ColdFusion 2021+ or Lu
 ## Documentation
 Installation: `box install megaphone`
 
+See [provider-independent digests and subscription lifecycle](docs/digests.md) for scheduled summaries delivered through ordinary notification channels. The [1.2.0 email digest API](docs/email-digests.md) remains supported.
+
 Config:
 ```cfc
 // config/modules/megaphone.cfc

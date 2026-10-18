@@ -8,7 +8,7 @@ component extends="commandbox-migrations.models.BaseMigrationCommand" {
         boolean roundtrip = true,
         string qbDirectory = "",
         boolean requireReturning = false,
-        string bundles = "tests.specs.integration.DatabaseInboxSpec,tests.specs.integration.EventStoreSpec,tests.specs.integration.DeliveryStoreSpec,tests.specs.integration.PreferenceStoreSpec,tests.specs.integration.SubscriptionStoreSpec,tests.specs.integration.EmailDigestSpec,tests.specs.integration.EmailDigestConcurrencySpec,tests.specs.unit.PreferenceResolverSpec,tests.specs.unit.SubscriptionCipherSpec,tests.specs.unit.EmailDigestScheduleSpec"
+        string bundles = "tests.specs.integration.DatabaseInboxSpec,tests.specs.integration.EventStoreSpec,tests.specs.integration.DeliveryStoreSpec,tests.specs.integration.PreferenceStoreSpec,tests.specs.integration.SubscriptionStoreSpec,tests.specs.integration.EmailDigestSpec,tests.specs.integration.EmailDigestConcurrencySpec,tests.specs.integration.GenericDigestSpec,tests.specs.integration.GenericDigestConcurrencySpec,tests.specs.unit.PreferenceResolverSpec,tests.specs.unit.SubscriptionCipherSpec,tests.specs.unit.EmailDigestScheduleSpec"
     ) {
         if ( !reFind( "^megaphone_api(_[a-f0-9]+)?$", arguments.database ) ) {
             throw( message = "Use an owned megaphone_api verification database." );

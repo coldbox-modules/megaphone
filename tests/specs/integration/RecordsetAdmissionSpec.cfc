@@ -2,12 +2,18 @@
 component extends="tests.specs.integration.DeliveryStoreSpec" {
 
     function run() {
-        describe( "Stock PostgreSQL JSON admission", () => {
+        describe( "Stock scalar and reference admission", () => {
             aroundEach( ( spec ) => {
                 transaction {
                     try {
                         spec.body();
                     } finally {
+                        if ( !variables.isPostgres && structKeyExists( variables, "originalTimeZone" ) ) {
+                            queryExecute(
+                                "SET SESSION time_zone = :zone",
+                                { "zone": { "value": variables.originalTimeZone, "cfsqltype": "varchar" } }
+                            );
+                        }
                         transactionRollback();
                     }
                 }
@@ -19,9 +25,18 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                     "2026-11-01T05:30:00.456Z",
                     "2026-11-01T06:30:00.654Z"
                 ];
-                for ( var zone in [ "UTC", "America/New_York", "Pacific/Auckland" ] ) {
+                // Numeric offsets work even when MySQL's optional named timezone tables are absent.
+                var zones = variables.isPostgres ? [ "UTC", "America/New_York", "Pacific/Auckland" ] : [
+                    "+00:00",
+                    "-04:00",
+                    "+13:00"
+                ];
+                if ( !variables.isPostgres ) {
+                    variables.originalTimeZone = queryExecute( "SELECT @@session.time_zone AS zone" ).zone[ 1 ];
+                }
+                for ( var zone in zones ) {
                     queryExecute(
-                        "SELECT set_config('TimeZone', :zone, true)",
+                        variables.isPostgres ? "SELECT set_config('TimeZone', :zone, true)" : "SET SESSION time_zone = :zone",
                         { "zone": { "value": zone, "cfsqltype": "varchar" } }
                     );
                     for ( var instant in dates ) {
@@ -85,7 +100,11 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
         return variables.injector
             .getInstance( "QueryBuilder@qb" )
             .from( arguments.table )
-            .selectRaw( "CAST(""" & arguments.column & """ AS TEXT) AS value" )
+            .selectRaw(
+                variables.isPostgres
+                 ? "CAST(""" & arguments.column & """ AS TEXT) AS value"
+                 : "CAST(`" & arguments.column & "` AS CHAR) AS value"
+            )
             .where( "id", arguments.id )
             .get()[ 1 ].value;
     }

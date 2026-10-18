@@ -2,6 +2,13 @@ component extends="tests.resources.ModuleIntegrationSpec" {
 
     function run() {
         describe( "Digest module registration", () => {
+            it( "resolves the generic lifecycle service through both public service names", () => {
+                var generic = getInstance( "DigestService@megaphone" );
+                var legacy = getInstance( "EmailDigestService@megaphone" );
+                expect( listLast( getMetadata( generic ).name, "." ) ).toBe( "DigestService" );
+                expect( generic ).toBe( legacy );
+                expect( getInstance( "NotificationService@megaphone" ).getChannel( "digestBatch" ).getProviderName() ).toBe( "DigestBatchProvider" );
+            } );
             it( "resolves configured named definitions and automatically registers the batch provider", () => {
                 var digests = getInstance( "EmailDigestService@megaphone" );
                 var configuredStore = prepareMock( digests ).$getProperty( "store", "variables" );
@@ -51,6 +58,33 @@ component extends="tests.resources.ModuleIntegrationSpec" {
                         }
                     }
                     expect( zones.sort( "text" ) ).toBe( [ "America/Denver", "Europe/London" ] );
+                } finally {
+                    removeRegisteredTasks( scheduler, before );
+                    structDelete( config.digests, name );
+                }
+            } );
+            it( "registers notification-based definitions on the existing module scheduler", () => {
+                var scheduler = getInstance( "cbScheduler@megaphone" );
+                var digests = getInstance( "DigestService@megaphone" );
+                var config = getController().getSetting( "modules" ).megaphone.settings;
+                var name = "generic" & replace( createUUID(), "-", "", "all" );
+                var before = scheduler.getRegisteredTasks();
+                try {
+                    digests.registerDigest(
+                        name,
+                        {
+                            "timezone": "UTC",
+                            "schedule": ( task ) => task.everyDayAt( "23:59" ).when( () => false ),
+                            "notification": "tests.resources.GenericDigestSummaryFixture",
+                            "policy": "tests.resources.GenericDigestPolicyFixture"
+                        }
+                    );
+                    digests.addSubscription(
+                        notifiable = new tests.resources.InboxRecipient(),
+                        digestName = name,
+                        timezone = "America/Denver"
+                    );
+                    expect( scheduler.getRegisteredTasks().len() ).toBe( before.len() + 2 );
                 } finally {
                     removeRegisteredTasks( scheduler, before );
                     structDelete( config.digests, name );

@@ -37,6 +37,14 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                         "notificationMapping": index % 2 ? "" : "tests.resources.QueueNotification"
                     } );
                 }
+                // Compare persisted precision with the scalar path: MySQL event timestamps store whole seconds.
+                var scalarInput = duplicate( inputs[ 1 ] );
+                scalarInput.namespace = createUUID();
+                var expectedDate = variables.events.record( argumentCollection = scalarInput ).createdDate;
+                if ( variables.isPostgres ) {
+                    expect( millisecondsBetween( expectedDate, time ) ).toBe( 0 );
+                }
+                variables.counter.count = 0;
                 var events = variables.events.recordMany( inputs );
                 var intents = [];
                 for ( var event in events ) {
@@ -61,13 +69,13 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                     var work = deliveries[ index ];
                     expect( event.eventKey ).toBe( inputs[ index ].eventKey );
                     expect( event.payload ).toBe( inputs[ index ].payload );
-                    expect( dateDiff( "l", event.createdDate, time ) ).toBe( 0 );
+                    expect( millisecondsBetween( event.createdDate, expectedDate ) ).toBe( 0 );
                     expect( event.version ).toBe( index );
                     expect( work.deviceId ).toBe( "" );
                     expect( work.recipientId ).toBe( "00012" );
                     expect( work.routingHash ).toBe( "000123" );
                     expect( work.routingData ).toBe( intents[ index ].routingData );
-                    expect( dateDiff( "l", work.availableDate, time ) ).toBe( 0 );
+                    expect( millisecondsBetween( work.availableDate, time ) ).toBe( 0 );
                     expect( work.attemptCount ).toBe( 0 );
                     expect( work.state ).toBe( intents[ index ].initialState );
                     expect( isDate( work.settledDate ?: "" ) ).toBe( work.state == "suppressed" );
@@ -114,6 +122,10 @@ component extends="tests.specs.integration.DeliveryStoreSpec" {
                 expect( variables.counter.count ).toBe( 0 );
             } );
         } );
+    }
+
+    private numeric function millisecondsBetween( required date start, required date finish ) {
+        return parseDateTime( arguments.finish ).getTime() - parseDateTime( arguments.start ).getTime();
     }
 
 }
