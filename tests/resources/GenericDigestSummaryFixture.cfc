@@ -13,8 +13,9 @@ component extends="megaphone.models.BaseNotification" {
             "batchId": variables.batchId
         };
         variables.state.getFormatted().append( data );
-        if ( !isNull( variables.state.getOnFormat() ) ) {
-            variables.state.getOnFormat()();
+        var onFormat = variables.state.getOnFormat();
+        if ( !isNull( onFormat ) ) {
+            onFormat();
         }
         return data;
     }

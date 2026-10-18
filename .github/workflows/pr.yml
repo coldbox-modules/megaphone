@@ -177,10 +177,5 @@ jobs:
       - name: Install CFFormat
         run: bash .github/scripts/box-install.sh commandbox-cfformat
 
-      - name: Run CFFormat
-        run: box run-script format
-
-      - name: Commit Format Changes
-        uses: stefanzweifel/git-auto-commit-action@v4
-        with:
-          commit_message: Apply cfformat changes
+      - name: Check formatting
+        run: box run-script format:check
