@@ -14,7 +14,7 @@ component extends="megaphone.models.BaseNotification" {
         };
         variables.state.getFormatted().append( data );
         if ( !isNull( variables.state.getOnFormat() ) ) {
-            variables.state.getOnFormat()( );
+            variables.state.getOnFormat()();
         }
         return data;
     }
