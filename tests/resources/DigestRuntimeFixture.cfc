@@ -17,6 +17,9 @@ component accessors="true" {
     function getNotifiable( type, id ) {
         return new tests.resources.InboxRecipient( arguments.id, arguments.type );
     }
+    function digestMany( required array inputs ) {
+        return arguments.inputs.map( ( input ) => digest( input.value, input.context ) );
+    }
     function digest( value, context ) {
         return new megaphone.models.Delivery.NotificationSnapshotHasher().digest( value, context );
     }

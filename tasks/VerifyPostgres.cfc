@@ -6,7 +6,9 @@ component extends="commandbox-migrations.models.BaseMigrationCommand" {
         string database = "megaphone_api",
         string password = "megaphone-test",
         boolean roundtrip = true,
-        string bundles = "tests.specs.integration.DatabaseInboxSpec,tests.specs.integration.EventStoreSpec,tests.specs.integration.DeliveryStoreSpec,tests.specs.integration.PreferenceStoreSpec,tests.specs.integration.SubscriptionStoreSpec,tests.specs.integration.EmailDigestSpec,tests.specs.integration.EmailDigestConcurrencySpec,tests.specs.unit.PreferenceResolverSpec,tests.specs.unit.SubscriptionCipherSpec,tests.specs.unit.EmailDigestScheduleSpec"
+        string qbDirectory = "",
+        boolean requireReturning = false,
+        string bundles = "tests.specs.integration.DatabaseInboxSpec,tests.specs.integration.EventStoreSpec,tests.specs.integration.DeliveryStoreSpec,tests.specs.integration.PreferenceStoreSpec,tests.specs.integration.SubscriptionStoreSpec,tests.specs.integration.EmailDigestSpec,tests.specs.integration.EmailDigestConcurrencySpec,tests.specs.integration.GenericDigestSpec,tests.specs.integration.GenericDigestConcurrencySpec,tests.specs.unit.PreferenceResolverSpec,tests.specs.unit.SubscriptionCipherSpec,tests.specs.unit.EmailDigestScheduleSpec"
     ) {
         if ( !reFind( "^megaphone_api(_[a-f0-9]+)?$", arguments.database ) ) {
             throw( message = "Use an owned megaphone_api verification database." );
@@ -25,6 +27,7 @@ component extends="commandbox-migrations.models.BaseMigrationCommand" {
         );
         var root = fileSystemUtil.resolvePath( "." );
         fileSystemUtil.createMapping( "/megaphone", root );
+        fileSystemUtil.createMapping( "/megaphoneStockAlias", root );
         fileSystemUtil.createMapping( "/tests", root & "/tests" );
         fileSystemUtil.createMapping( "/testbox", root & "/testbox" );
         fileSystemUtil.createMapping( "/coldbox", root & "/tests/resources/app/coldbox" );
@@ -47,8 +50,14 @@ component extends="commandbox-migrations.models.BaseMigrationCommand" {
             service.runAllMigrations( "down" );
             service.runAllMigrations( "up" );
         }
-        fileSystemUtil.createMapping( "/qb", root & "/modules/qb" );
-        fileSystemUtil.createMapping( "/cbpaginator", root & "/modules/qb/modules/cbpaginator" );
+        var qbRoot = len( arguments.qbDirectory ) ? fileSystemUtil.resolvePath( arguments.qbDirectory ) : root & "/modules/qb";
+        if ( !fileExists( qbRoot & "/models/Query/QueryBuilder.cfc" ) ) {
+            throw( message = "Use an installed qb module directory." );
+        }
+        fileSystemUtil.createMapping( "/qb", qbRoot );
+        fileSystemUtil.createMapping( "/qbStockAlias", qbRoot );
+        fileSystemUtil.createMapping( "/cbpaginator", qbRoot & "/modules/cbpaginator" );
+        application.megaphoneRequireReturning = arguments.requireReturning;
         fileSystemUtil.createMapping( "/str", root & "/modules/str" );
         var result = new testbox.system.TestBox( bundles = arguments.bundles ).run( reporter = "json" );
         fileWrite( root & "/.tmp/postgres-tests.json", result );

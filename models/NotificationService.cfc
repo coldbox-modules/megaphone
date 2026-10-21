@@ -54,14 +54,41 @@ component singleton accessors="true" {
         string connection,
         string queue
     ) {
+        return capturePlan( argumentCollection = arguments );
+    }
+
+    private NotificationPlan function capturePlan(
+        required any notifiables,
+        required any notification,
+        struct properties = {},
+        struct options = {},
+        string connection,
+        string queue,
+        boolean deferHashes = false,
+        any captureSnapshotter
+    ) {
+        var captured = captureArguments( argumentCollection = arguments );
+        return newNotificationPlan().configure( argumentCollection = captured );
+    }
+
+    private struct function captureArguments(
+        required any notifiables,
+        required any notification,
+        struct properties = {},
+        struct options = {},
+        string connection,
+        string queue,
+        boolean deferHashes = false,
+        any captureSnapshotter
+    ) {
         var queueOptions = {};
         for ( var name in [ "connection", "queue" ] ) {
             if ( !isNull( arguments[ name ] ) ) {
                 queueOptions[ name ] = arguments[ name ];
             }
         }
-        var runtime = newNotificationRuntime();
-        var snapshotter = newSnapshotHasher();
+        var runtime = arguments.deferHashes ? {} : newNotificationRuntime();
+        var snapshotter = isNull( arguments.captureSnapshotter ) ? newSnapshotHasher() : arguments.captureSnapshotter;
         if ( isSimpleValue( arguments.notification ) ) {
             arguments.notification = variables.wirebox.getInstance( arguments.notification );
         }
@@ -94,22 +121,18 @@ component singleton accessors="true" {
                 message = "Event identity and a positive integer version are required."
             );
         }
-        event.payloadHash = runtime.digest( event.payload, { "namespace": event.namespace, "kind": "payload" } );
-        var plan = newNotificationPlan().configure(
-            event,
-            [],
-            arguments.options.admitAfter ?: javacast( "null", "" ),
-            queueOptions
+        event.payloadHash = arguments.deferHashes ? "" : runtime.digest(
+            event.payload,
+            { "namespace": event.namespace, "kind": "payload" }
         );
         if ( !isNull( arguments.options.admitAfter ) && dateCompare( occurredAt, arguments.options.admitAfter ) < 0 ) {
             event.expired = true;
-            plan = newNotificationPlan().configure(
-                event,
-                [],
-                arguments.options.admitAfter,
-                queueOptions
-            );
-            return plan;
+            return {
+                "event": event,
+                "deliveries": [],
+                "admitAfter": arguments.options.admitAfter,
+                "queueOptions": queueOptions
+            };
         }
         var intents = [];
         var seen = {};
@@ -124,6 +147,12 @@ component singleton accessors="true" {
             for ( var channelName in channelNames ) {
                 var channel = getChannel( channelName );
                 var collects = isCustomFunction( channel.supportsCollection ?: "" ) && channel.supportsCollection();
+                if ( collects && ( arguments.options.rejectCollections ?: false ) ) {
+                    throw(
+                        type = "Megaphone.Digests.RecursiveCollection",
+                        message = "A generated digest summary cannot route into a collection channel."
+                    );
+                }
                 if (
                     !collects && (
                         !isCustomFunction( channel.prepareDelivery ?: "" ) || !isCustomFunction(
@@ -180,18 +209,434 @@ component singleton accessors="true" {
                         "deviceId": deviceId,
                         "enabled": enabled,
                         "routingData": routing,
-                        "routingHash": runtime.digest( routing, { "namespace": event.namespace, "kind": "routing" } ),
+                        "routingHash": arguments.deferHashes ? "" : runtime.digest(
+                            routing,
+                            { "namespace": event.namespace, "kind": "routing" }
+                        ),
                         "availableDate": arguments.options.availableDate ?: now()
                     } );
                 }
             }
         }
-        return newNotificationPlan().configure(
-            event,
-            intents,
-            arguments.options.admitAfter ?: javacast( "null", "" ),
-            queueOptions
-        );
+        var captured = { "event": event, "deliveries": intents, "queueOptions": queueOptions };
+        if ( !isNull( arguments.options.admitAfter ) ) {
+            captured.admitAfter = arguments.options.admitAfter;
+        }
+        return captured;
+    }
+
+    /** Captures ordinary plan() requests and hashes their snapshots together in input order. */
+    public array function planMany( required array requests ) {
+        var plans = [];
+        var captures = [];
+        var hashes = [];
+        var snapshotters = {};
+        for ( var inputRequest in arguments.requests ) {
+            var options = structCopy( inputRequest );
+            options.deferHashes = true;
+            options.captureSnapshotter = batchSnapshotter( snapshotters );
+            var plan = capturePlan( argumentCollection = options );
+            var captured = plan.getMemento();
+            plans.append( plan );
+            captures.append( captured );
+            hashes.append( { "value": captured.event.payload, "context": { "namespace": captured.event.namespace, "kind": "payload" } } );
+            for ( var intent in captured.deliveries ) {
+                hashes.append( { "value": intent.routingData, "context": { "namespace": captured.event.namespace, "kind": "routing" } } );
+            }
+        }
+        if ( hashes.isEmpty() ) {
+            return plans;
+        }
+        var digests = newNotificationRuntime().digestMany( hashes );
+        var cursor = 1;
+        for ( var index = 1; index <= plans.len(); index++ ) {
+            var captured = captures[ index ];
+            captured.event.payloadHash = digests[ cursor++ ];
+            for ( var intent in captured.deliveries ) {
+                intent.routingHash = digests[ cursor++ ];
+            }
+            var argumentsForPlan = {
+                "event": captured.event,
+                "deliveries": captured.deliveries,
+                "queueOptions": plans[ index ].getQueueOptions()
+            };
+            if ( !isNull( captured.admitAfter ) ) {
+                argumentsForPlan.admitAfter = captured.admitAfter;
+            }
+            plans[ index ].configure( argumentCollection = argumentsForPlan );
+        }
+        return plans;
+    }
+
+    /** Captures and admits requests without constructing plans when only queue references are needed. */
+    public void function admitRequests(
+        required array requests,
+        boolean alreadyAdmitted = false,
+        string connection,
+        string queue
+    ) {
+        if ( arguments.requests.isEmpty() ) {
+            return;
+        }
+        var runtime = newNotificationRuntime();
+        var settings = runtime.getSettings();
+        var adapter = runtime.resolve( "queueAdapter" );
+        var fallback = isNull( adapter ) || !isCustomFunction( adapter.enqueueReferencesMany ?: "" ) ||
+        ( structKeyExists( settings, "digests" ) && !structIsEmpty( settings.digests ) );
+        var captures = [];
+        var snapshotters = {};
+        for ( var inputRequest in arguments.requests ) {
+            var captureOptions = structCopy( inputRequest );
+            captureOptions.deferHashes = true;
+            captureOptions.captureSnapshotter = batchSnapshotter( snapshotters );
+            var captured = captureArguments( argumentCollection = captureOptions );
+            for ( var intent in captured.deliveries ) {
+                fallback = fallback || ( intent.collection ?: false ) || structKeyExists(
+                    intent.routingData,
+                    "emailDigest"
+                );
+            }
+            captures.append( captured );
+        }
+        var plans = [];
+        if ( fallback ) {
+            // Custom plan configuration can transform snapshots before hashing; preserve that contract.
+            for ( var index = 1; index <= captures.len(); index++ ) {
+                var plan = newNotificationPlan().configure( argumentCollection = captures[ index ] );
+                plans.append( plan );
+                captures[ index ] = plan.getMemento();
+                captures[ index ].queueOptions = plan.getQueueOptions();
+            }
+        }
+        hashCaptures( captures );
+        var admissionArguments = structCopy( arguments );
+        structDelete( admissionArguments, "requests" );
+        if ( fallback ) {
+            for ( var index = 1; index <= plans.len(); index++ ) {
+                var planArguments = structCopy( captures[ index ] );
+                structDelete( planArguments, "schemaVersion" );
+                plans[ index ].configure( argumentCollection = planArguments );
+            }
+            admissionArguments.plans = plans;
+            queuePlans( argumentCollection = admissionArguments );
+            return;
+        }
+        admissionArguments.captures = captures;
+        admissionArguments.adapter = adapter;
+        admitCaptures( argumentCollection = admissionArguments );
+    }
+
+    private void function hashCaptures( required array captures ) {
+        var hashes = [];
+        for ( var captured in arguments.captures ) {
+            hashes.append( { "value": captured.event.payload, "context": { "namespace": captured.event.namespace, "kind": "payload" } } );
+            for ( var intent in captured.deliveries ) {
+                hashes.append( { "value": intent.routingData, "context": { "namespace": captured.event.namespace, "kind": "routing" } } );
+            }
+        }
+        if ( hashes.isEmpty() ) {
+            return;
+        }
+        var digests = newNotificationRuntime().digestMany( hashes );
+        var cursor = 1;
+        for ( var captured in arguments.captures ) {
+            captured.event.payloadHash = digests[ cursor++ ];
+            for ( var intent in captured.deliveries ) {
+                intent.routingHash = digests[ cursor++ ];
+            }
+        }
+    }
+
+    /**
+     * Admits saved plans without constructing result models when the adapter accepts references.
+     * Existing model-based admission remains the fallback for legacy adapters and collections.
+     */
+    public void function admitPlans(
+        required array plans,
+        boolean alreadyAdmitted = false,
+        string connection,
+        string queue
+    ) {
+        if ( arguments.plans.isEmpty() ) {
+            return;
+        }
+        var runtime = newNotificationRuntime();
+        var settings = runtime.getSettings();
+        var adapter = runtime.resolve( "queueAdapter" );
+        var fallback = isNull( adapter ) || !isCustomFunction( adapter.enqueueReferencesMany ?: "" ) ||
+        ( structKeyExists( settings, "digests" ) && !structIsEmpty( settings.digests ) );
+        var captures = arguments.plans.map( ( plan ) => plan.getMemento() );
+        for ( var captured in captures ) {
+            for ( var intent in captured.deliveries ) {
+                fallback = fallback || ( intent.collection ?: false ) || structKeyExists(
+                    intent.routingData,
+                    "emailDigest"
+                );
+            }
+        }
+        if ( fallback ) {
+            queuePlans( argumentCollection = arguments );
+            return;
+        }
+        for ( var index = 1; index <= captures.len(); index++ ) {
+            captures[ index ].queueOptions = arguments.plans[ index ].getQueueOptions();
+        }
+        var admissionArguments = structCopy( arguments );
+        structDelete( admissionArguments, "plans" );
+        admissionArguments.captures = captures;
+        admissionArguments.adapter = adapter;
+        admitCaptures( argumentCollection = admissionArguments );
+    }
+
+    private void function admitCaptures(
+        required array captures,
+        required any adapter,
+        boolean alreadyAdmitted = false,
+        string connection,
+        string queue
+    ) {
+        transaction {
+            try {
+                var active = [];
+                var ordinals = [];
+                for ( var index = 1; index <= captures.len(); index++ ) {
+                    var captured = captures[ index ];
+                    if (
+                        !arguments.alreadyAdmitted && !isNull( captured.admitAfter ) &&
+                        dateCompare( captured.event.createdDate, captured.admitAfter ) < 0
+                    ) {
+                        continue;
+                    }
+                    active.append( captured.event );
+                    ordinals.append( index );
+                }
+                if ( active.isEmpty() ) {
+                    return;
+                }
+                var eventStore = newEventStore();
+                var events = isCustomFunction( eventStore.recordReferences ?: "" )
+                 ? eventStore.recordReferences( active )
+                 : eventStore.recordMany( active );
+                var intents = [];
+                var optionsByIntent = [];
+                var names = {
+                    "notifiableType": "recipientType",
+                    "notifiableId": "recipientId",
+                    "channelName": "channel"
+                };
+                for ( var index = 1; index <= events.len(); index++ ) {
+                    if ( !events[ index ].created ) {
+                        continue;
+                    }
+                    var options = structCopy( captures[ ordinals[ index ] ].queueOptions ?: {} );
+                    for ( var key in [ "connection", "queue" ] ) {
+                        if ( !isNull( arguments[ key ] ) ) {
+                            options[ key ] = arguments[ key ];
+                        }
+                    }
+                    var optionContext = { "options": options };
+                    for ( var intent in captures[ ordinals[ index ] ].deliveries ) {
+                        if ( !structKeyExists( intent, "enabled" ) || !isBoolean( intent.enabled ) ) {
+                            throw(
+                                type = "Megaphone.Delivery.InvalidIntent",
+                                message = "Every delivery needs an explicit channel choice."
+                            );
+                        }
+                        var values = duplicate( intent );
+                        for ( var name in names ) {
+                            if ( structKeyExists( values, name ) ) {
+                                values[ names[ name ] ] = values[ name ];
+                                structDelete( values, name );
+                            }
+                        }
+                        values.eventId = events[ index ].id;
+                        values.initialState = intent.enabled ? "queued" : "suppressed";
+                        intents.append( values );
+                        optionsByIntent.append( optionContext );
+                    }
+                }
+                var deliveryStore = newDeliveryStore();
+                var deliveries = isCustomFunction( deliveryStore.enqueueReferences ?: "" )
+                 ? deliveryStore.enqueueReferences( intents )
+                 : deliveryStore.enqueueMany( intents );
+                var groups = {};
+                for ( var index = 1; index <= deliveries.len(); index++ ) {
+                    var delivery = deliveries[ index ];
+                    if ( !delivery.created || delivery.state != "queued" ) {
+                        continue;
+                    }
+                    var optionContext = optionsByIntent[ index ];
+                    var options = optionContext.options;
+                    if ( !structKeyExists( optionContext, "groupKey" ) ) {
+                        optionContext.groupKey = hash(
+                            serializeJSON( [ options.connection ?: javacast( "null", "" ), options.queue ?: javacast( "null", "" ) ] ),
+                            "SHA-256"
+                        );
+                    }
+                    var groupKey = optionContext.groupKey;
+                    if ( !structKeyExists( groups, groupKey ) ) {
+                        groups[ groupKey ] = { "options": options, "references": [] };
+                    }
+                    groups[ groupKey ].references.append( { "id": delivery.id, "state": delivery.state, "availableDate": delivery.availableDate } );
+                }
+                for ( var key in groups ) {
+                    var enqueueArguments = duplicate( groups[ key ].options );
+                    enqueueArguments.references = groups[ key ].references;
+                    adapter.enqueueReferencesMany( argumentCollection = enqueueArguments );
+                }
+            } catch ( any error ) {
+                transactionRollback();
+                rethrow;
+            }
+        }
+    }
+
+    /** All plans share one publication transaction, including legacy adapter and digest fallbacks. */
+    public array function queuePlans(
+        required array plans,
+        boolean alreadyAdmitted = false,
+        string connection,
+        string queue
+    ) {
+        var result = [];
+        if ( arguments.plans.isEmpty() ) {
+            return result;
+        }
+        var runtime = newNotificationRuntime();
+        var settings = runtime.getSettings();
+        var captures = arguments.plans.map( ( plan ) => plan.getMemento() );
+        var fallback = structKeyExists( settings, "digests" ) && !structIsEmpty( settings.digests );
+        for ( var captured in captures ) {
+            for ( var intent in captured.deliveries ) {
+                fallback = fallback || ( intent.collection ?: false ) || structKeyExists(
+                    intent.routingData,
+                    "emailDigest"
+                );
+            }
+        }
+        transaction {
+            try {
+                if ( fallback ) {
+                    for ( var plan in arguments.plans ) {
+                        var original = { "plan": plan, "alreadyAdmitted": arguments.alreadyAdmitted };
+                        for ( var key in [ "connection", "queue" ] ) {
+                            if ( !isNull( arguments[ key ] ) ) {
+                                original[ key ] = arguments[ key ];
+                            }
+                        }
+                        result.append( queuePlan( argumentCollection = original ) );
+                    }
+                    return result;
+                }
+                var active = [];
+                var ordinals = [];
+                for ( var index = 1; index <= captures.len(); index++ ) {
+                    var captured = captures[ index ];
+                    if (
+                        !arguments.alreadyAdmitted && !isNull( captured.admitAfter ) && dateCompare(
+                            captured.event.createdDate,
+                            captured.admitAfter
+                        ) < 0
+                    ) {
+                        result.append(
+                            newNotificationPublication().configure(
+                                newNotificationEvent().configure( { "expired": true } )
+                            )
+                        );
+                    } else {
+                        result.append( "" );
+                        active.append( captured.event );
+                        ordinals.append( index );
+                    }
+                }
+                if ( active.isEmpty() ) {
+                    return result;
+                }
+                var service = newDeliveryService();
+                var events = service.recordEvents( active );
+                var entries = [];
+                var deliveryIndexes = {};
+                for ( var index = 1; index <= events.len(); index++ ) {
+                    var event = events[ index ];
+                    if ( event.getCreated() ) {
+                        deliveryIndexes[ event.getId() ] = [];
+                        for ( var intent in captures[ ordinals[ index ] ].deliveries ) {
+                            entries.append( { "eventId": event.getId(), "intent": intent } );
+                            deliveryIndexes[ event.getId() ].append( entries.len() );
+                        }
+                    }
+                }
+                var admitted = service.createDeliveries( entries );
+                var stored = service.getDeliveriesForEvents(
+                    events.filter( ( event ) => !event.getCreated() ).map( ( event ) => event.getId() )
+                );
+                var byEvent = {};
+                for ( var delivery in stored ) {
+                    if ( !structKeyExists( byEvent, delivery.getEventId() ) ) {
+                        byEvent[ delivery.getEventId() ] = [];
+                    }
+                    byEvent[ delivery.getEventId() ].append( delivery );
+                }
+                var groups = {};
+                for ( var index = 1; index <= events.len(); index++ ) {
+                    var event = events[ index ];
+                    var deliveries = [];
+                    if ( event.getCreated() ) {
+                        for ( var position in deliveryIndexes[ event.getId() ] ) {
+                            deliveries.append( admitted[ position ] );
+                        }
+                    } else {
+                        deliveries = byEvent[ event.getId() ] ?: [];
+                    }
+                    result[ ordinals[ index ] ] = newNotificationPublication().configure( event, deliveries );
+                    var queueOptions = arguments.plans[ ordinals[ index ] ].getQueueOptions();
+                    for ( var key in [ "connection", "queue" ] ) {
+                        if ( !isNull( arguments[ key ] ) ) {
+                            queueOptions[ key ] = arguments[ key ];
+                        }
+                    }
+                    var groupKey = hash(
+                        serializeJSON( [
+                            queueOptions.connection ?: javacast( "null", "" ),
+                            queueOptions.queue ?: javacast( "null", "" )
+                        ] ),
+                        "SHA-256"
+                    );
+                    if ( !structKeyExists( groups, groupKey ) ) {
+                        groups[ groupKey ] = { "options": queueOptions, "deliveries": [] };
+                    }
+                    for ( var delivery in deliveries ) {
+                        if ( event.getCreated() && delivery.getCreated() && delivery.getState() == "queued" ) {
+                            groups[ groupKey ].deliveries.append( delivery );
+                        }
+                    }
+                }
+                var adapter = runtime.resolve( "queueAdapter" );
+                if ( !isNull( adapter ) ) {
+                    for ( var key in groups ) {
+                        var group = groups[ key ];
+                        if ( group.deliveries.isEmpty() ) {
+                            continue;
+                        }
+                        if ( isCustomFunction( adapter.enqueueMany ?: "" ) ) {
+                            var enqueueArguments = duplicate( group.options );
+                            enqueueArguments.deliveries = group.deliveries;
+                            adapter.enqueueMany( argumentCollection = enqueueArguments );
+                        } else {
+                            for ( var delivery in group.deliveries ) {
+                                var enqueueArguments = duplicate( group.options );
+                                enqueueArguments.delivery = delivery;
+                                adapter.enqueue( argumentCollection = enqueueArguments );
+                            }
+                        }
+                    }
+                }
+                return result;
+            } catch ( any error ) {
+                transactionRollback();
+                rethrow;
+            }
+        }
     }
 
     /**
@@ -251,6 +696,9 @@ component singleton accessors="true" {
                 }
                 var deliveries = [];
                 var collections = [];
+                if ( captured.deliveries.some( ( intent ) => intent.collection ?: false ) ) {
+                    newDigestService().lockCollections( captured.deliveries );
+                }
                 for ( var intent in captured.deliveries ) {
                     if ( structKeyExists( intent, "collection" ) && intent.collection ) {
                         var channel = getChannel( intent.channelName );
@@ -386,6 +834,22 @@ component singleton accessors="true" {
      * Supplies the default deterministic snapshot hasher through WireBox.
      * @returns any
      */
+    /** Only the unmodified singleton snapshotter can be shared within a single batch capture. */
+    private any function batchSnapshotter( required struct state ) {
+        if ( !structKeyExists( arguments.state, "shared" ) ) {
+            arguments.state.instance = newSnapshotHasher();
+            var mapping = variables.wirebox.getBinder().getMapping( "NotificationSnapshotHasher@megaphone" );
+            arguments.state.shared = compareNoCase( mapping.getScope(), "singleton" ) == 0 &&
+            compareNoCase( mapping.getType(), "cfc" ) == 0 &&
+            new megaphone.models.Storage.StockSourceIdentity().isStockComponent(
+                arguments.state.instance,
+                "megaphone.models.Delivery.NotificationSnapshotHasher"
+            );
+            return arguments.state.instance;
+        }
+        return arguments.state.shared ? arguments.state.instance : newSnapshotHasher();
+    }
+
     private any function newSnapshotHasher() provider="NotificationSnapshotHasher@megaphone" {
     }
     /**
@@ -393,6 +857,12 @@ component singleton accessors="true" {
      * @returns any
      */
     private any function newDeliveryService() provider="NotificationDeliveryService@megaphone" {
+    }
+
+    /** Configured stores retain identity conflicts and caller-transaction behavior for no-result admission. */
+    private any function newEventStore() provider="EventStore@megaphone" {
+    }
+    private any function newDeliveryStore() provider="DeliveryStore@megaphone" {
     }
 
     /**

@@ -224,7 +224,10 @@ component extends="tests.specs.integration.EventStoreSpec" {
                     adapter
                 );
                 expect( recovered.status ).toBe( "saved" );
-                expect( dateCompare( recovered.delivery.availableDate, later, "s" ) ).toBe( 0 );
+                // Compare persisted cutoffs before and after recovery, including database precision.
+                expect( parseDateTime( variables.deliveries.find( work.id ).availableDate ).getTime() ).toBe(
+                    parseDateTime( work.availableDate ).getTime()
+                );
                 expect( variables.deliveries.due().len() ).toBe( 0 );
                 expect(
                     requestRecovery(

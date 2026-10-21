@@ -348,11 +348,15 @@ component accessors="true" {
      * Loads the original ordered batch membership and restores item data.
      * @returns array
      */
-    public array function items( required string batchId ) {
-        return newDigestQuery( "items" )
+    public array function items( required string batchId, boolean lockRows = false ) {
+        var query = newDigestQuery( "items" )
             .where( "batchId", arguments.batchId )
             .orderBy( "batchPosition" )
-            .orderBy( "id" )
+            .orderBy( "id" );
+        if ( arguments.lockRows ) {
+            query.lockForUpdate();
+        }
+        return query
             .get()
             .map( ( item ) => {
                 item.data = deserializeJSON( item.data );
@@ -368,6 +372,150 @@ component accessors="true" {
             .where( "id", arguments.id )
             .where( "state", "batched" )
             .update( { "state": "suppressed" } );
+    }
+
+    /** Generic publication provenance is separate from legacy batches and their delivery IDs. */
+    public any function publication( required string batchId, boolean lockRow = false ) {
+        var query = newDigestQuery( "publications" ).where( "batchId", arguments.batchId );
+        if ( arguments.lockRow ) {
+            query.lockForUpdate();
+        }
+        var rows = query.get();
+        if ( !rows.isEmpty() ) {
+            return rows[ 1 ];
+        }
+    }
+
+    public any function publicationForEvent( required string eventId ) {
+        var rows = newDigestQuery( "publications" ).where( "eventId", arguments.eventId ).get();
+        if ( !rows.isEmpty() ) {
+            return rows[ 1 ];
+        }
+    }
+
+    public void function reservePublication( required string batchId ) {
+        newDigestQuery( "publications" ).insert( {
+            "batchId": arguments.batchId,
+            "eventId": textBinding( "" ),
+            "transportStarted": { "value": false, "cfsqltype": "bit" }
+        } );
+    }
+
+    public void function recordPublication( required string batchId, required string eventId ) {
+        newDigestQuery( "publications" )
+            .where( "batchId", arguments.batchId )
+            .update( { "eventId": arguments.eventId } );
+    }
+
+    public void function markPublicationStarted( required string batchId ) {
+        newDigestQuery( "publications" )
+            .where( "batchId", arguments.batchId )
+            .update( { "transportStarted": { "value": true, "cfsqltype": "bit" } } );
+    }
+
+    /** Locks all pending source membership after the subscription lock has been acquired. */
+    public array function pending( required string subscriptionId ) {
+        return newDigestQuery( "items" )
+            .where( "subscriptionId", arguments.subscriptionId )
+            .whereIn( "state", [ "collected", "batched" ] )
+            .orderBy( "id" )
+            .lockForUpdate()
+            .get()
+            .map( ( item ) => {
+                item.data = deserializeJSON( item.data );
+                return item;
+            } );
+    }
+
+    /** Starts a new generation without reviving previously suppressed identities. */
+    public struct function transition(
+        required struct subscription,
+        required string mode,
+        required struct schedule,
+        required string timezone,
+        required numeric clock,
+        required string resumeMode,
+        array preserveIds = []
+    ) {
+        var current = change(
+            arguments.subscription,
+            arguments.mode,
+            arguments.schedule,
+            arguments.timezone,
+            arguments.clock,
+            arguments.clock
+        );
+        newDigestQuery( "subscriptions" ).where( "id", current.id ).update( { "resumeMode": arguments.resumeMode } );
+        if ( !arguments.preserveIds.isEmpty() ) {
+            newDigestQuery( "items" )
+                .where( "subscriptionId", current.id )
+                .whereIn( "id", arguments.preserveIds )
+                .update( {
+                    "generation": current.generation,
+                    "state": "collected",
+                    "batchId": textBinding( "" ),
+                    "batchPosition": { "value": 0, "null": true, "cfsqltype": "integer" }
+                } );
+        }
+        return this.subscription( current.id );
+    }
+
+    /** Transfer admission bypasses the prospective occurrence boundary, never the destination identity fence. */
+    public struct function receiveTransfer( required struct subscription, required struct item, required numeric clock ) {
+        var rows = newDigestQuery( "items" )
+            .where( "subscriptionId", arguments.subscription.id )
+            .where( "itemKey", arguments.item.itemKey )
+            .lockForUpdate()
+            .get();
+        if ( !rows.isEmpty() ) {
+            if ( rows[ 1 ].payloadHash != arguments.item.payloadHash || rows[ 1 ].occurredAt != arguments.item.occurredAt ) {
+                throw(
+                    type = "Megaphone.Digests.IdentityConflict",
+                    message = "The destination already has different content for this item key."
+                );
+            }
+            copyAdmissions( arguments.item.id, rows[ 1 ].id );
+            // A transfer tombstone is distinct from suppression: explicit transfer back may restore it.
+            if ( rows[ 1 ].state == "transferred" ) {
+                newDigestQuery( "items" )
+                    .where( "id", rows[ 1 ].id )
+                    .update( {
+                        "generation": arguments.subscription.generation,
+                        "state": "collected",
+                        "collectedAt": epochBinding( arguments.clock ),
+                        "batchId": textBinding( "" ),
+                        "batchPosition": { "value": 0, "null": true, "cfsqltype": "integer" }
+                    } );
+                return { "id": rows[ 1 ].id, "created": true };
+            }
+            return { "id": rows[ 1 ].id, "created": false };
+        }
+        var values = duplicate( arguments.item );
+        values.id = uuid();
+        values.subscriptionId = arguments.subscription.id;
+        values.generation = arguments.subscription.generation;
+        values.data = serializeJSON( values.data );
+        values.occurredAt = epochBinding( values.occurredAt );
+        values.collectedAt = epochBinding( arguments.clock );
+        values.state = "collected";
+        values.eventId = textBinding( values.eventId ?: "" );
+        values.batchId = textBinding( "" );
+        values.batchPosition = { "value": 0, "null": true, "cfsqltype": "integer" };
+        newDigestQuery( "items" ).insert( values );
+        copyAdmissions( arguments.item.id, values.id );
+        return { "id": values.id, "created": true };
+    }
+
+    public void function markTransferred( required array ids ) {
+        if ( !arguments.ids.isEmpty() ) {
+            newDigestQuery( "items" ).whereIn( "id", arguments.ids ).update( { "state": "transferred" } );
+        }
+    }
+
+    private void function copyAdmissions( required string sourceId, required string destinationId ) {
+        for ( var admission in newDigestQuery( "admissions" ).where( "itemId", arguments.sourceId ).get() ) {
+            associateEvent( arguments.destinationId, admission.eventId );
+        }
     }
 
     /**

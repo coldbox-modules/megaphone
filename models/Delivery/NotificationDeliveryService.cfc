@@ -23,6 +23,13 @@ component singleton {
         return newNotificationEvent().configure( variables.eventStore.record( argumentCollection = arguments ) );
     }
 
+    /** Records an atomic batch through the configured event store. */
+    public array function recordEvents( required array events ) {
+        return variables.eventStore
+            .recordMany( arguments.events )
+            .map( ( row ) => newNotificationEvent().configure( row ) );
+    }
+
     /**
      * Loads a public event object by ID, or returns null.
      * @returns any
@@ -62,6 +69,29 @@ component singleton {
         values.eventId = arguments.eventId;
         values.initialState = arguments.intent.enabled ? "queued" : "suppressed";
         return delivery( variables.deliveryStore.enqueue( argumentCollection = values ) );
+    }
+
+    /** Creates an ordered batch of public delivery intents without provider I/O. */
+    public array function createDeliveries( required array entries ) {
+        var intents = [];
+        for ( var entry in arguments.entries ) {
+            if ( !structKeyExists( entry.intent, "enabled" ) || !isBoolean( entry.intent.enabled ) ) {
+                throw(
+                    type = "Megaphone.Delivery.InvalidIntent",
+                    message = "Every delivery needs an explicit channel choice."
+                );
+            }
+            var values = storageIntent( entry.intent );
+            values.eventId = entry.eventId;
+            values.initialState = entry.intent.enabled ? "queued" : "suppressed";
+            intents.append( values );
+        }
+        return variables.deliveryStore.enqueueMany( intents ).map( ( row ) => delivery( row ) );
+    }
+
+    /** Loads persisted work for a bounded set of events without expanding its audience. */
+    public array function getDeliveriesForEvents( required array eventIds ) {
+        return variables.deliveryStore.forEvents( arguments.eventIds ).map( ( row ) => delivery( row ) );
     }
 
     /**
@@ -221,12 +251,37 @@ component singleton {
                     message = "Stored notification has no reconstruction mapping."
                 );
             }
+            var summary = event.getNamespace() == "megaphone.digest.summary" ? digestService().summaryPublication(
+                event.getId()
+            ) : javacast( "null", "" );
+            if ( event.getNamespace() == "megaphone.digest.summary" && isNull( summary ) ) {
+                return settle(
+                    work,
+                    claimed.token,
+                    result( "suppressed", "digest-provenance-missing" ),
+                    retrySeconds
+                );
+            }
+            var payload = event.getPayload();
+            var summaryReady = {};
+            if ( !isNull( summary ) ) {
+                summaryReady = digestService().prepareSummary( notifiable, summary.batchId );
+                if ( summaryReady.status != "ready" ) {
+                    return settle(
+                        work,
+                        claimed.token,
+                        result( "suppressed", summaryReady.reason ),
+                        retrySeconds
+                    );
+                }
+                payload = summaryReady.payload;
+            }
             var notification = variables.wirebox
                 .getInstance( event.getNotificationMapping() )
-                .populate( event.getPayload() )
+                .populate( payload )
                 .setId( work.getId() );
             var preferences = notification.getChannelPreferences( notifiable );
-            if ( !preferences[ work.getChannelName() ].enabled ) {
+            if ( !( preferences[ work.getChannelName() ].enabled ?: false ) ) {
                 return settle(
                     work,
                     claimed.token,
@@ -262,7 +317,8 @@ component singleton {
                 );
             }
             // Rendering can outlive a preference change. Check again before marking transport started.
-            if ( !notification.getChannelPreferences( notifiable )[ work.getChannelName() ].enabled ) {
+            var finalPreferences = notification.getChannelPreferences( notifiable );
+            if ( !( finalPreferences[ work.getChannelName() ].enabled ?: false ) ) {
                 return settle(
                     work,
                     claimed.token,
@@ -279,7 +335,31 @@ component singleton {
             );
         }
         try {
-            if ( isCustomFunction( channel.startDeliveryTransport ?: "" ) ) {
+            if ( !isNull( summary ) ) {
+                var transportArguments = {
+                    "notifiable": notifiable,
+                    "batchId": summary.batchId,
+                    "itemIds": summaryReady.itemIds,
+                    "work": work,
+                    "token": claimed.token
+                };
+                if ( isCustomFunction( channel.startDeliveryTransport ?: "" ) ) {
+                    transportArguments.transportGuard = () => channel.startDeliveryTransport(
+                        prepared,
+                        work,
+                        claimed.token
+                    );
+                }
+                var transport = digestService().startSummaryTransport( argumentCollection = transportArguments );
+                if ( transport.getStatus() != "ready" ) {
+                    return settlePreparation(
+                        work,
+                        claimed.token,
+                        transport,
+                        retrySeconds
+                    );
+                }
+            } else if ( isCustomFunction( channel.startDeliveryTransport ?: "" ) ) {
                 var transport = channel.startDeliveryTransport( prepared, work, claimed.token );
                 if ( !isInstanceOf( transport, "megaphone.models.Delivery.DeliveryPreparation" ) ) {
                     throw(
@@ -637,6 +717,9 @@ component singleton {
     private NotificationRecoveryReceipt function newNotificationRecoveryReceipt()
         provider="NotificationRecoveryReceipt@megaphone"
     {
+    }
+
+    private any function digestService() provider="EmailDigestService@megaphone" {
     }
 
 }

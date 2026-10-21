@@ -205,15 +205,16 @@ component singleton {
             );
         }
         var definition = structCopy( variables.settings.digests[ arguments.digestName ] );
+        var generic = len( definition.notification ?: "" );
         if (
-            !len( definition.emailChannel ?: "" ) || !structKeyExists( definition, "policy" ) || !structKeyExists(
-                definition,
-                "renderer"
-            )
+            !structKeyExists( definition, "policy" ) || (
+                !generic && ( !len( definition.emailChannel ?: "" ) || !structKeyExists( definition, "renderer" ) )
+            ) ||
+            ( generic && ( structKeyExists( definition, "emailChannel" ) || structKeyExists( definition, "renderer" ) ) )
         ) {
             throw(
                 type = "Megaphone.Digests.InvalidDefinition",
-                message = "A digest needs emailChannel, policy and renderer; scheduled digest mode also needs a schedule."
+                message = "Configure policy and notification for a generic digest, or policy, emailChannel and renderer for a legacy email digest. Do not mix the two formats."
             );
         }
         var requestedName = arguments.digestName;
@@ -234,6 +235,246 @@ component singleton {
             arguments.notifiable.getNotifiableType(),
             normalizedId( toString( arguments.notifiable.getNotifiableId() ) )
         );
+    }
+
+    /** Resolves lifecycle settings with exactly the same native scheduling rules as the legacy API. @internal */
+    public struct function subscriptionSettings(
+        required string digestName,
+        required string mode,
+        string timezone,
+        any schedule
+    ) {
+        if ( !listFind( "digest,immediate", arguments.mode ) ) {
+            throw(
+                type = "Megaphone.Digests.InvalidMode",
+                message = "Use digest or immediate; stopSubscription disables collection."
+            );
+        }
+        var definition = getDefinition( arguments.digestName );
+        var timing = isNull( arguments.schedule ) ? { "definition": definition.name } : scheduleReference(
+            arguments.schedule,
+            definition.name
+        );
+        var zone = variables.calendar.timezone(
+            isNull( arguments.timezone ) ? (
+                !isNull( arguments.schedule ) && isObject( arguments.schedule ) ? arguments.schedule
+                    .getTimezone()
+                    .getId() : defaultTimezone( definition )
+            ) : arguments.timezone
+        );
+        if ( arguments.mode == "digest" ) {
+            if ( structKeyExists( timing, "definition" ) && !structKeyExists( definition, "schedule" ) ) {
+                throw(
+                    type = "Megaphone.Digests.InvalidSchedule",
+                    message = "Scheduled subscriptions require a schedule."
+                );
+            }
+            registerSchedule( definition.name, timing, zone );
+        }
+        return { "schedule": timing, "timezone": zone, "mode": arguments.mode };
+    }
+
+    /** Atomically publishes one ordinary notification event and its captured channel intents. @internal */
+    public struct function publishBatch( required any notifiable, required string batchId ) {
+        assertSharedStorage();
+        transaction {
+            try {
+                var batch = variables.store.batch( arguments.batchId );
+                if ( isNull( batch ) ) {
+                    return { "status": "suppressed" };
+                }
+                variables.store.subscription( batch.subscriptionId, true );
+                var existing = variables.store.publication( batch.id, true );
+                if ( !isNull( existing ) && len( existing.eventId ?: "" ) ) {
+                    return { "status": "accepted", "eventId": existing.eventId };
+                }
+                var ready = prepareBatch( arguments.notifiable, batch.id, true );
+                if ( ready.status != "ready" ) {
+                    return { "status": "suppressed" };
+                }
+                var notification = variables.wirebox.getInstance( ready.definition.notification );
+                if ( !isInstanceOf( notification, "megaphone.models.BaseNotification" ) ) {
+                    throw(
+                        type = "Megaphone.Digests.InvalidNotification",
+                        message = "A digest notification mapping must resolve to BaseNotification."
+                    );
+                }
+                var payload = {
+                    "batchId": batch.id,
+                    "digestName": ready.definition.name,
+                    "cutoffAt": ready.batch.cutoffAt,
+                    "items": ready.items
+                };
+                var plan = newNotificationService().plan(
+                    arguments.notifiable,
+                    notification,
+                    payload,
+                    {
+                        "namespace": "megaphone.digest.summary",
+                        "eventKey": batch.id,
+                        "version": 1,
+                        "rejectCollections": true
+                    }
+                );
+                var captured = plan.getMemento();
+                for ( var intent in captured.deliveries ) {
+                    if ( intent.collection ?: false ) {
+                        throw(
+                            type = "Megaphone.Digests.RecursiveCollection",
+                            message = "A generated digest summary cannot route into a collection channel."
+                        );
+                    }
+                }
+                var event = variables.deliveries.recordEvent( argumentCollection = captured.event );
+                if ( event.getCreated() ) {
+                    for ( var intent in captured.deliveries ) {
+                        variables.deliveries.createDelivery( event.getId(), intent );
+                    }
+                }
+                variables.store.recordPublication( batch.id, event.getId() );
+                return { "status": "accepted", "eventId": event.getId() };
+            } catch ( any error ) {
+                transactionRollback();
+                rethrow;
+            }
+        }
+    }
+
+    /** Publication has committed before workers perform external I/O. @internal */
+    public void function dispatchPublishedBatch( required string batchId ) {
+        var published = variables.store.publication( arguments.batchId );
+        if ( !isNull( published ) && len( published.eventId ?: "" ) ) {
+            for ( var work in variables.deliveries.getDeliveriesForEvent( published.eventId ) ) {
+                variables.deliveries.dispatch( work.getId() );
+            }
+        }
+    }
+
+    /** Returns provenance only for configured generic digests; legacy-only installs need no new table reads. @internal */
+    public any function summaryPublication( required string eventId ) {
+        return variables.store.publicationForEvent( arguments.eventId );
+    }
+
+    /** Rebuilds payload from current eligible membership before channel formatting. @internal */
+    public struct function prepareSummary( required any notifiable, required string batchId, boolean lockRows = false ) {
+        var ready = prepareBatch( arguments.notifiable, arguments.batchId, arguments.lockRows );
+        if ( ready.status == "ready" ) {
+            ready.payload = {
+                "batchId": ready.batch.id,
+                "digestName": ready.definition.name,
+                "cutoffAt": ready.batch.cutoffAt,
+                "items": ready.items
+            };
+            ready.itemIds = ready.items.map( ( item ) => item.id );
+        }
+        return ready;
+    }
+
+    /** Locks the subscription across the final membership check and durable transport fence. @internal */
+    public DeliveryPreparation function startSummaryTransport(
+        required any notifiable,
+        required string batchId,
+        required array itemIds,
+        required any work,
+        required string token,
+        any transportGuard
+    ) {
+        transaction {
+            try {
+                var batch = variables.store.batch( arguments.batchId );
+                variables.store.subscription( batch.subscriptionId, true );
+                var ready = prepareSummary( arguments.notifiable, batch.id, true );
+                if ( ready.status != "ready" ) {
+                    return newDeliveryPreparation().configure( { "status": "suppressed", "reason": ready.reason } );
+                }
+                if ( serializeJSON( ready.itemIds ) != serializeJSON( arguments.itemIds ) ) {
+                    return newDeliveryPreparation().configure( { "status": "deferred", "reason": "digest-membership-changed" } );
+                }
+                if ( !isNull( arguments.transportGuard ) ) {
+                    var guarded = arguments.transportGuard();
+                    if ( !isInstanceOf( guarded, "megaphone.models.Delivery.DeliveryPreparation" ) ) {
+                        throw(
+                            type = "Megaphone.Delivery.InvalidPreparation",
+                            message = "Transport guards return DeliveryPreparation."
+                        );
+                    }
+                    if ( guarded.getStatus() != "ready" ) {
+                        return guarded;
+                    }
+                } else if ( !variables.deliveryStore.startTransport( arguments.work.getId(), arguments.token ) ) {
+                    return newDeliveryPreparation().configure( { "status": "deferred", "reason": "superseded" } );
+                }
+                variables.store.markPublicationStarted( batch.id );
+                return newDeliveryPreparation().configure();
+            } catch ( any error ) {
+                transactionRollback();
+                rethrow;
+            }
+        }
+    }
+
+    private any function newNotificationService() provider="NotificationService@megaphone" {
+    }
+
+    /** Lifecycle transfers must use the same transaction as batch and delivery provenance. @internal */
+    public void function validateStorage() {
+        assertSharedStorage();
+    }
+
+    /** Collection fan-out acquires the same recipient/name order as lifecycle transfers. @internal */
+    public void function lockCollections( required array intents ) {
+        var identities = {};
+        for ( var intent in arguments.intents ) {
+            if ( !( intent.collection ?: false ) || !structKeyExists( intent.routingData, "emailDigest" ) ) {
+                continue;
+            }
+            var definition = getDefinition( intent.routingData.emailDigest.digestName );
+            var recipientId = normalizedId( intent.notifiableId );
+            identities[ serializeJSON( [ intent.notifiableType, recipientId, definition.name ] ) ] = {
+                "type": intent.notifiableType,
+                "id": recipientId,
+                "definition": definition
+            };
+        }
+        var ordered = identities.keyArray();
+        ordered.sort( "textnocase" );
+        for ( var key in ordered ) {
+            var identity = identities[ key ];
+            var found = variables.store.ensure(
+                identity.definition.name,
+                identity.type,
+                identity.id,
+                variables.calendar.epoch( now() ),
+                { "definition": identity.definition.name },
+                defaultTimezone( identity.definition )
+            );
+            variables.store.subscription( found.id, true );
+        }
+    }
+
+    /** Immediate destinations produce one-item jobs during transfer, without external I/O. @internal */
+    public void function freezeTransferredImmediate(
+        required any notifiable,
+        required struct subscription,
+        required string itemId,
+        required numeric instant
+    ) {
+        assertSharedStorage();
+        var definition = getDefinition( arguments.subscription.digestName );
+        var recipient = arguments.notifiable;
+        var currentSubscription = arguments.subscription;
+        var batch = variables.store.freeze(
+            currentSubscription,
+            arguments.instant,
+            ( candidates ) => selectItems(
+                recipient,
+                definition,
+                currentSubscription,
+                candidates
+            ),
+            arguments.itemId
+        );
+        createBatchDelivery( currentSubscription, batch );
     }
 
     /**
@@ -505,21 +746,26 @@ component singleton {
         if ( arguments.batch.state != "frozen" ) {
             return;
         }
+        var definition = getDefinition( arguments.subscription.digestName );
+        var generic = len( definition.notification ?: "" );
+        if ( generic ) {
+            variables.store.reservePublication( arguments.batch.id );
+        }
         var event = variables.deliveries.recordEvent(
-            namespace = "megaphone.emailDigest",
+            namespace = generic ? "megaphone.digest" : "megaphone.emailDigest",
             eventKey = arguments.batch.id,
             version = 1,
-            type = "emailDigestBatch",
+            type = generic ? "digestBatch" : "emailDigestBatch",
             payload = { "batchId": arguments.batch.id },
             payloadHash = arguments.batch.id,
-            notificationMapping = "EmailDigestBatchNotification@megaphone"
+            notificationMapping = generic ? "DigestBatchNotification@megaphone" : "EmailDigestBatchNotification@megaphone"
         );
         var delivery = variables.deliveries.createDelivery(
             event.getId(),
             {
                 "notifiableType": arguments.subscription.notifiableType,
                 "notifiableId": arguments.subscription.notifiableId,
-                "channelName": "emailDigestBatch",
+                "channelName": generic ? "digestBatch" : "emailDigestBatch",
                 "enabled": true,
                 "routingData": { "batchId": arguments.batch.id },
                 "routingHash": arguments.batch.id,
@@ -535,17 +781,22 @@ component singleton {
      * @returns array
      */
     public array function dispatchDue( numeric limit = 100, date clock = now() ) {
-        variables.deliveries.recoverExpired(
-            limit = arguments.limit,
-            constraints = ( builder ) => builder.where( "channel", "emailDigestBatch" )
-        );
+        var generic = false;
+        for ( var definition in variables.settings.digests ?: {} ) {
+            generic = generic || len( variables.settings.digests[ definition ].notification ?: "" );
+        }
+        var publications = variables.store.getTableName( "publications" );
+        var constraint = ( builder ) => {
+            builder.where( ( nested ) => {
+                nested.whereIn( "channel", [ "emailDigestBatch", "digestBatch" ] );
+                if ( generic ) {
+                    nested.orWhereIn( "eventId", ( events ) => events.from( publications ).select( "eventId" ) );
+                }
+            } );
+        };
+        variables.deliveries.recoverExpired( limit = arguments.limit, constraints = constraint );
         var results = [];
-        for (
-            var work in variables.deliveries.getDueDeliveries(
-                limit = arguments.limit,
-                constraints = ( builder ) => builder.where( "channel", "emailDigestBatch" )
-            )
-        ) {
+        for ( var work in variables.deliveries.getDueDeliveries( limit = arguments.limit, constraints = constraint ) ) {
             results.append( { "deliveryId": work.getId(), "result": variables.deliveries.dispatch( work.getId() ) } );
         }
         return results;
@@ -555,12 +806,12 @@ component singleton {
      * Rechecks live consent and eligibility, permanently excluding items that no longer qualify.
      * @returns struct
      */
-    public struct function prepareBatch( required any notifiable, required string batchId ) {
-        var batch = variables.store.batch( arguments.batchId );
+    public struct function prepareBatch( required any notifiable, required string batchId, boolean lockRows = false ) {
+        var batch = variables.store.batch( arguments.batchId, arguments.lockRows );
         if ( isNull( batch ) ) {
             return { "status": "suppressed", "reason": "batch-missing" };
         }
-        var current = variables.store.subscription( batch.subscriptionId );
+        var current = variables.store.subscription( batch.subscriptionId, arguments.lockRows );
         if (
             isNull( current ) || current.notifiableType != arguments.notifiable.getNotifiableType() || compare(
                 current.notifiableId,
@@ -581,7 +832,7 @@ component singleton {
             return { "status": "suppressed", "reason": "subscription-or-consent-disabled" };
         }
         var items = [];
-        for ( var item in variables.store.items( batch.id ) ) {
+        for ( var item in variables.store.items( batch.id, arguments.lockRows ) ) {
             if ( item.state != "batched" ) {
                 continue;
             }
@@ -616,7 +867,7 @@ component singleton {
         transaction {
             try {
                 variables.store.subscription( batch.subscriptionId, true );
-                var current = prepareBatch( original.notifiable, batch.id );
+                var current = prepareBatch( original.notifiable, batch.id, true );
                 if ( current.status != "ready" ) {
                     return newDeliveryPreparation().configure( { "status": "suppressed", "reason": current.reason } );
                 }

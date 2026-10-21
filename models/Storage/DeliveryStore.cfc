@@ -28,6 +28,162 @@ component accessors="true" {
         string initialState = "queued",
         date availableDate = now()
     ) {
+        return enqueueMany( [ arguments ] )[ 1 ];
+    }
+
+    /** Batch admission never replaces an existing delivery or resets its lifecycle. */
+    public array function enqueueMany( required array intents ) {
+        return writeDeliveries( arguments.intents );
+    }
+
+    /** Explicit no-result admission; custom stores and unsupported builders retain their public batch override. */
+    public array function enqueueReferences( required array intents ) {
+        var bulk = new megaphone.models.Storage.StockReferenceRecords();
+        if (
+            !bulk.isStockComponent( this, "megaphone.models.Storage.DeliveryStore" ) || !bulk.supportsReturning(
+                newQueryBuilder()
+            )
+        ) {
+            return this
+                .enqueueMany( arguments.intents )
+                .map( ( row ) => {
+                    return {
+                        "id": row.id,
+                        "state": row.state,
+                        "availableDate": row.availableDate,
+                        "created": row.created
+                    };
+                } );
+        }
+        return writeDeliveries( arguments.intents, true, bulk );
+    }
+
+    private array function writeDeliveries( required array intents, boolean referencesOnly = false, any bulkRecords ) {
+        var preparation = { "references": arguments.referencesOnly };
+        if ( arguments.referencesOnly && !arguments.intents.isEmpty() ) {
+            preparation.auditClock = now();
+        }
+        var prepared = arguments.intents.map( ( intent ) => prepareDelivery( argumentCollection = intent, preparation = preparation ) );
+        var result = [];
+        if ( prepared.isEmpty() ) {
+            return result;
+        }
+        var bulk = isNull( arguments.bulkRecords ) ? new megaphone.models.Storage.BulkRecords() : arguments.bulkRecords;
+        var referenceTemplates = {};
+        var insertTypes = {
+            "id": "varchar",
+            "eventId": "varchar",
+            "recipientType": "varchar",
+            "recipientId": "varchar",
+            "channel": "varchar",
+            "deviceId": "varchar",
+            "routingHash": "varchar",
+            "routingData": "varchar",
+            "state": "varchar",
+            "attemptCount": "integer",
+            "availableDate": "timestamp",
+            "createdDate": "timestamp",
+            "updatedDate": "timestamp",
+            "settledDate": "timestamp"
+        };
+        var size = arguments.referencesOnly ? max( 1, min( 1000, int( 30000 / structCount( prepared[ 1 ].values ) ) ) ) : bulk.insertSize(
+            prepared[ 1 ].values
+        );
+        transaction {
+            try {
+                for ( var offset = 1; offset <= prepared.len(); offset += size ) {
+                    var batch = prepared.slice( offset, min( size, prepared.len() - offset + 1 ) );
+                    var rawValues = batch.map( ( entry ) => entry.values );
+                    var insertValues = arguments.referencesOnly ? rawValues : bulk.typedRows( rawValues, insertTypes );
+                    var records = [];
+                    if ( arguments.referencesOnly ) {
+                        records = bulk.insertStockReferences(
+                            store = this,
+                            types = insertTypes,
+                            query = newDeliveryQuery(),
+                            values = insertValues,
+                            identities = batch.map( ( entry ) => entry.identity ),
+                            columns = [
+                                "id",
+                                "routingHash",
+                                "state",
+                                "availableDate"
+                            ],
+                            queryFactory = () => newDeliveryQuery(),
+                            tableName = getTableName(),
+                            templates = referenceTemplates
+                        );
+                    } else {
+                        newDeliveryQuery().insertIgnore( insertValues );
+                        records = bulk.read(
+                            () => newDeliveryQuery(),
+                            batch.map( ( entry ) => entry.identity ),
+                            getTableName()
+                        );
+                    }
+                    for ( var index = 1; index <= batch.len(); index++ ) {
+                        var stored = records[ index ][ 1 ];
+                        if ( stored.routingHash != batch[ index ].values.routingHash ) {
+                            throw(
+                                type = "Megaphone.Delivery.IdentityConflict",
+                                message = "This delivery identity already refers to different routing content."
+                            );
+                        }
+                        if ( arguments.referencesOnly ) {
+                            result.append( {
+                                "id": stored.id,
+                                "state": stored.state,
+                                "availableDate": stored.availableDate,
+                                "created": stored.id == batch[ index ].values.id
+                            } );
+                        } else {
+                            var work = decode( stored );
+                            work.created = stored.id == batch[ index ].values.id;
+                            result.append( work );
+                        }
+                    }
+                }
+            } catch ( any error ) {
+                transactionRollback();
+                rethrow;
+            }
+        }
+        return result;
+    }
+
+    /** Returns saved work for bounded event sets, including suppressed and terminal history. */
+    public array function forEvents( required array eventIds ) {
+        var result = [];
+        var seen = {};
+        var uniqueIds = [];
+        for ( var id in arguments.eventIds ) {
+            var key = hash( id, "SHA-256" );
+            if ( !structKeyExists( seen, key ) ) {
+                seen[ key ] = true;
+                uniqueIds.append( id );
+            }
+        }
+        for ( var offset = 1; offset <= uniqueIds.len(); offset += 100 ) {
+            var ids = uniqueIds.slice( offset, min( 100, uniqueIds.len() - offset + 1 ) );
+            for ( var row in newDeliveryQuery().whereIn( "eventId", ids ).get() ) {
+                result.append( decode( row ) );
+            }
+        }
+        return result;
+    }
+
+    private struct function prepareDelivery(
+        required string eventId,
+        required string recipientType,
+        required string recipientId,
+        required string channel,
+        required struct routingData,
+        required string routingHash,
+        string deviceId = "",
+        string initialState = "queued",
+        date availableDate = now(),
+        struct preparation = {}
+    ) {
         if (
             !len( trim( arguments.eventId ) ) || !len( trim( arguments.recipientType ) ) ||
             !len( trim( arguments.recipientId ) ) || !len( trim( arguments.channel ) ) ||
@@ -46,7 +202,7 @@ component accessors="true" {
             "deviceId": arguments.deviceId
         };
         var values = duplicate( identity );
-        values.deviceId = textBinding( identity.deviceId );
+        values.deviceId = textBinding( arguments.deviceId );
         values.append( {
             "id": uuid(),
             "routingHash": arguments.routingHash,
@@ -54,27 +210,29 @@ component accessors="true" {
             "state": arguments.initialState,
             "attemptCount": 0,
             "availableDate": arguments.availableDate,
-            "createdDate": now(),
-            "updatedDate": now(),
-            "settledDate": timestamp( arguments.initialState == "suppressed" ? now() : javacast( "null", "" ) )
+            "createdDate": arguments.preparation.auditClock ?: now(),
+            "updatedDate": arguments.preparation.auditClock ?: now(),
+            "settledDate": timestamp(
+                arguments.initialState == "suppressed" ? ( arguments.preparation.auditClock ?: now() ) : javacast(
+                    "null",
+                    ""
+                )
+            )
         } );
-        newDeliveryQuery().insertIgnore( values );
-        var stored = newDeliveryQuery()
-            .where( "eventId", identity.eventId )
-            .where( "recipientType", identity.recipientType )
-            .where( "recipientId", identity.recipientId )
-            .where( "channel", identity.channel )
-            .where( "deviceId", textBinding( identity.deviceId ) )
-            .get()[ 1 ];
-        if ( stored.routingHash != arguments.routingHash ) {
-            throw(
-                type = "Megaphone.Delivery.IdentityConflict",
-                message = "This delivery identity already refers to different routing content."
-            );
+        if ( !( arguments.preparation.references ?: false ) ) {
+            for (
+                var key in [
+                    "eventId",
+                    "recipientType",
+                    "recipientId",
+                    "channel",
+                    "deviceId"
+                ]
+            ) {
+                identity[ key ] = textBinding( arguments[ key ] );
+            }
         }
-        var result = decode( stored );
-        result[ "created" ] = stored.id == values.id;
-        return result;
+        return { "identity": identity, "values": values };
     }
 
     /** Trusted migration boundary. Restores storage state without routing, claims, or provider I/O. */
@@ -294,7 +452,7 @@ component accessors="true" {
                 .update( {
                     "state": "queued",
                     "recoveryAllowance": row.recoveryAllowance + arguments.additionalAttempts,
-                    "availableDate": available,
+                    "availableDate": timestamp( available ),
                     "updatedDate": arguments.clock,
                     "reason": textBinding( "operator-recovery" ),
                     "leaseToken": textBinding( "" ),
