@@ -1,3 +1,16 @@
+# v1.3.0
+## 21 Oct 2026 — 22:28:35 UTC
+
+### chore
+
++ __release:__ trigger 1.3.0 release
+ ([9a423dd](https://github.com/coldbox-modules/megaphone/commit/9a423dd7d9a0f5e7928297bb5cbd40c9bc68fd31))
+
+### feat
+
++ __digests:__ add provider-independent digest subscriptions ([24f6157](https://github.com/coldbox-modules/megaphone/commit/24f61576081c44c889258035f6276fc41bb06f7b))
+
+
 # v1.2.0
 ## 14 Oct 2026 — 20:30:15 UTC
 
