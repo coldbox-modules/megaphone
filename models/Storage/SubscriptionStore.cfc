@@ -263,6 +263,38 @@ component accessors="true" {
             .map( ( row ) => row.deviceId );
     }
 
+    /** Read bounded batches without retaining preference or device state between calls. */
+    public array function excludedIdsMany( required any notifiable, required array notificationTypes ) {
+        var owner = recipient( arguments.notifiable );
+        var types = [];
+        var byType = {};
+        for ( var notificationType in arguments.notificationTypes ) {
+            if ( !isSimpleValue( notificationType ) || !len( trim( notificationType ) ) || len( notificationType ) > 160 ) {
+                throw( type = "Megaphone.Push.InvalidExclusion", message = "A valid notification type is required." );
+            }
+            // Hash keys retain case-sensitive type identity on all supported engines.
+            var key = hash( notificationType, "SHA-256" );
+            if ( !structKeyExists( byType, key ) ) {
+                byType[ key ] = [];
+                types.append( notificationType );
+            }
+        }
+        for ( var offset = 1; offset <= types.len(); offset += 500 ) {
+            var batch = types.slice( offset, min( 500, types.len() - offset + 1 ) );
+            var rows = newExclusionQuery()
+                .select( [ "notificationType", "deviceId" ] )
+                .where( "recipientType", owner.recipientType )
+                .where( "recipientId", owner.recipientId )
+                .whereIn( "notificationType", batch )
+                .orderBy( "deviceId" )
+                .get();
+            for ( var row in rows ) {
+                byType[ hash( row.notificationType, "SHA-256" ) ].append( row.deviceId );
+            }
+        }
+        return arguments.notificationTypes.map( ( notificationType ) => duplicate( byType[ hash( notificationType, "SHA-256" ) ] ) );
+    }
+
     /** Retire expired owned destinations independently, retaining device identity and exclusions. */
     public numeric function retireExpired( any notifiable, date clock = now(), numeric limit = 100 ) {
         if ( arguments.limit < 1 || arguments.limit > 1000 || fix( arguments.limit ) != arguments.limit ) {

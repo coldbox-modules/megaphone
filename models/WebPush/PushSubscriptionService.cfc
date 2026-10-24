@@ -82,6 +82,11 @@ component singleton {
     public array function getExcludedIds( required any notifiable, required string notificationType ) {
         return variables.store.excludedIds( argumentCollection = arguments );
     }
+
+    /** Ordered, recipient-owned exclusions; missing types return empty arrays. */
+    public array function getExcludedIdsMany( required any notifiable, required array notificationTypes ) {
+        return variables.store.excludedIdsMany( argumentCollection = arguments );
+    }
     /**
      * Retires a bounded set of expired active registrations independently.
      * @returns numeric

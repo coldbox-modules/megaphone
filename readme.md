@@ -587,3 +587,7 @@ WireBox names such as `NotificationPlan@megaphone` and `WebPushRuntime@megaphone
 ### Named email digests
 
 Collect notifications through `EmailDigestProvider@megaphone` into independent named subscriptions and schedules. `EmailDigestService@megaphone` freezes due batches and sends them through a receipt-aware email channel. Collection, email acceptance, and uncertain sends remain separate states. See [Named email digests](docs/email-digests.md) for configuration, policies, scheduler integration, and per-digest unsubscribe.
+
+### Batched device exclusions
+
+Use `PushSubscriptionService@megaphone.getExcludedIdsMany(notifiable, notificationTypes)` to read exclusions for multiple types. Results are arrays of device IDs in input order, including empty arrays for missing types and independent arrays for duplicate inputs. Reads remain scoped to the recipient type and ID, preserve case-sensitive notification types, and use at most 500 distinct types per query. An empty batch executes no query. No preference or device state is cached.
