@@ -17,12 +17,10 @@ component extends="tests.specs.integration.SubscriptionStoreSpec" {
                     try {
                         variables.owner = new tests.resources.InboxRecipient( id = "batch-owner", type = "User" );
                         variables.other = new tests.resources.InboxRecipient( id = "batch-owner", type = "Team" );
-                        variables.queries = [];
-                        variables.grammar.setInterceptorService(
-                            new tests.resources.PreferenceQueryObserver()
-                                .setDelegate( previous )
-                                .setQueries( variables.queries )
-                        );
+                        variables.queryObserver = new tests.resources.PreferenceQueryObserver()
+                            .setDelegate( previous )
+                            .setQueries( [] );
+                        variables.grammar.setInterceptorService( variables.queryObserver );
                         spec.body();
                     } finally {
                         transactionRollback();
@@ -67,15 +65,15 @@ component extends="tests.specs.integration.SubscriptionStoreSpec" {
                     "notice-'?--"
                 ];
                 var expected = types.map( ( type ) => variables.subscriptions.excludedIds( variables.owner, type ) );
-                variables.queries.clear();
+                variables.queryObserver.setQueries( [] );
                 var result = variables.push.getExcludedIdsForTypes( variables.owner, types );
-                expect( variables.queries.len() ).toBe( 1 );
-                expect( find( "notice-'?--", variables.queries[ 1 ].sql ) ).toBe( 0 );
-                expect( isStruct( result ) ).toBeTrue();
+                expect( variables.queryObserver.getQueries().len() ).toBe( 1 );
+                expect( find( "notice-'?--", variables.queryObserver.getQueries()[ 1 ].sql ) ).toBe( 0 );
+                expect( isStruct( result ) ).toBeTrue( "Exclusions must be a struct." );
                 expect( structCount( result ) ).toBe( 3 );
                 var serialized = serializeJSON( result );
-                expect( find( serializeJSON( types[ 1 ] ), serialized ) > 0 ).toBeTrue();
-                expect( find( serializeJSON( types[ 3 ] ), serialized ) > 0 ).toBeTrue();
+                expect( find( serializeJSON( types[ 1 ] ), serialized ) > 0 ).toBeTrue( "JSON must retain the lowercase type key: " & serialized );
+                expect( find( serializeJSON( types[ 3 ] ), serialized ) > 0 ).toBeTrue( "JSON must retain the uppercase type key: " & serialized );
                 for ( var index = 1; index <= types.len(); index++ ) {
                     expect( result[ types[ index ] ] ).toBe( expected[ index ] );
                 }
@@ -90,37 +88,37 @@ component extends="tests.specs.integration.SubscriptionStoreSpec" {
                 }
             } );
             it( "bounds requests and executes no SQL for empty or invalid batches", () => {
-                variables.queries.clear();
+                variables.queryObserver.setQueries( [] );
                 expect( variables.subscriptions.excludedIdsForTypes( variables.owner, [] ) ).toBeEmpty();
-                expect( variables.queries ).toBeEmpty();
+                expect( variables.queryObserver.getQueries() ).toBeEmpty();
                 expect( () => variables.subscriptions.excludedIdsForTypes( variables.owner, [ "valid", "" ] ) ).toThrow(
                     type = "Megaphone.Push.InvalidExclusion"
                 );
-                expect( variables.queries ).toBeEmpty();
+                expect( variables.queryObserver.getQueries() ).toBeEmpty();
                 expect( () => variables.subscriptions.excludedIdsForTypes( variables.owner, [ {} ] ) ).toThrow(
                     type = "Megaphone.Push.InvalidExclusion"
                 );
                 expect( () => variables.subscriptions.excludedIdsForTypes( variables.owner, [ repeatString( "x", 161 ) ] ) ).toThrow(
                     type = "Megaphone.Push.InvalidExclusion"
                 );
-                expect( variables.queries ).toBeEmpty();
+                expect( variables.queryObserver.getQueries() ).toBeEmpty();
                 var types = [];
                 for ( var index = 1; index <= 101; index++ ) {
                     types.append( index == 1 ? "containsKey" : "type-" & index );
                 }
                 var result = variables.subscriptions.excludedIdsForTypes( variables.owner, types );
                 expect( structCount( result ) ).toBe( 101 );
-                expect( variables.queries.len() ).toBe( 2 );
+                expect( variables.queryObserver.getQueries().len() ).toBe( 2 );
                 for ( var type in result ) {
                     expect( result[ type ] ).toBeEmpty();
                 }
-                variables.queries.clear();
+                variables.queryObserver.setQueries( [] );
                 var repeated = [];
                 for ( var index = 1; index <= 101; index++ ) {
                     repeated.append( "put" );
                 }
                 expect( structCount( variables.push.getExcludedIdsForTypes( variables.owner, repeated ) ) ).toBe( 1 );
-                expect( variables.queries.len() ).toBe( 1 );
+                expect( variables.queryObserver.getQueries().len() ).toBe( 1 );
             } );
         } );
     }

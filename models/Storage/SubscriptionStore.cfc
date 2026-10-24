@@ -267,10 +267,10 @@ component accessors="true" {
      * Returns a struct of excluded device-ID arrays keyed by notification type.
      * @returns struct
      */
-    public struct function excludedIdsForTypes( required any notifiable, required array notificationTypes ) {
+    public any function excludedIdsForTypes( required any notifiable, required array notificationTypes ) {
         var owner = recipient( arguments.notifiable );
         var identities = [];
-        // A Java map preserves distinct type keys on engines without native case-sensitive structs.
+        // Keep the struct-compatible map intact; BoxLang struct return coercion can collapse its JSON keys.
         var result = createObject( "java", "java.util.LinkedHashMap" ).init();
         for ( var notificationType in arguments.notificationTypes ) {
             if ( !isSimpleValue( notificationType ) || !len( trim( notificationType ) ) || len( notificationType ) > 160 ) {
