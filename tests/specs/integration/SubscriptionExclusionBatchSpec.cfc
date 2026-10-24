@@ -1,5 +1,14 @@
 component extends="tests.specs.integration.SubscriptionStoreSpec" {
 
+    function beforeAll() {
+        super.beforeAll();
+        variables.injector
+            .getBinder()
+            .map( "PushSubscriptionService@megaphone" )
+            .to( "megaphone.models.WebPush.PushSubscriptionService" );
+        variables.push = variables.injector.getInstance( "PushSubscriptionService@megaphone" );
+    }
+
     function run() {
         describe( "Batched owned device exclusions", () => {
             aroundEach( ( spec ) => {
@@ -21,7 +30,7 @@ component extends="tests.specs.integration.SubscriptionStoreSpec" {
                     }
                 }
             } );
-            it( "preserves request order, exact type identity, missing types and recipient ownership in one read", () => {
+            it( "matches scalar database comparisons while preserving order, missing types and recipient ownership in one read", () => {
                 var first = register( variables.owner, "batch-first" );
                 var second = register( variables.owner, "batch-second" );
                 var foreign = register( variables.other, "batch-other" );
@@ -43,36 +52,37 @@ component extends="tests.specs.integration.SubscriptionStoreSpec" {
                     foreign.id,
                     true
                 );
-                variables.queries.clear();
+                var differentOwner = new tests.resources.InboxRecipient( id = "another-owner", type = "User" );
+                var differentDevice = register( differentOwner, "different-owner" );
+                variables.subscriptions.setExcluded(
+                    differentOwner,
+                    "notice-'?--",
+                    differentDevice.id,
+                    true
+                );
                 var types = [
                     "notice-'?--",
                     "missing",
                     "NOTICE-'?--",
                     "notice-'?--"
                 ];
-                var service = createMock( "megaphone.models.WebPush.PushSubscriptionService" ).$property(
-                    "store",
-                    "variables",
-                    variables.subscriptions
-                );
-                var result = service.getExcludedIdsMany( variables.owner, types );
+                var expected = types.map( ( type ) => variables.subscriptions.excludedIds( variables.owner, type ) );
+                variables.queries.clear();
+                var result = variables.push.getExcludedIdsMany( variables.owner, types );
                 expect( variables.queries.len() ).toBe( 1 );
                 expect( find( "notice-'?--", variables.queries[ 1 ].sql ) ).toBe( 0 );
-                expect( result ).toBe( [
-                    [ first.id ],
-                    [],
-                    [ second.id ],
-                    [ first.id ]
-                ] );
+                expect( result ).toBe( expected );
+                expect( result[ 1 ].contains( foreign.id ) ).toBeFalse();
+                expect( result[ 1 ].contains( differentDevice.id ) ).toBeFalse();
                 result[ 1 ].append( "modified" );
-                expect( result[ 4 ] ).toBe( [ first.id ] );
+                expect( result[ 4 ] ).toBe( expected[ 4 ] );
                 for ( var index = 1; index <= types.len(); index++ ) {
-                    expect( service.getExcludedIdsMany( variables.owner, [ types[ index ] ] )[ 1 ] ).toBe(
-                        service.getExcludedIds( variables.owner, types[ index ] )
+                    expect( variables.push.getExcludedIdsMany( variables.owner, [ types[ index ] ] )[ 1 ] ).toBe(
+                        variables.push.getExcludedIds( variables.owner, types[ index ] )
                     );
                 }
             } );
-            it( "bounds unique types and executes no SQL for empty or invalid batches", () => {
+            it( "bounds requests and executes no SQL for empty or invalid batches", () => {
                 variables.queries.clear();
                 expect( variables.subscriptions.excludedIdsMany( variables.owner, [] ) ).toBeEmpty();
                 expect( variables.queries ).toBeEmpty();
@@ -80,12 +90,19 @@ component extends="tests.specs.integration.SubscriptionStoreSpec" {
                     type = "Megaphone.Push.InvalidExclusion"
                 );
                 expect( variables.queries ).toBeEmpty();
+                expect( () => variables.subscriptions.excludedIdsMany( variables.owner, [ {} ] ) ).toThrow(
+                    type = "Megaphone.Push.InvalidExclusion"
+                );
+                expect( () => variables.subscriptions.excludedIdsMany( variables.owner, [ repeatString( "x", 161 ) ] ) ).toThrow(
+                    type = "Megaphone.Push.InvalidExclusion"
+                );
+                expect( variables.queries ).toBeEmpty();
                 var types = [];
-                for ( var index = 1; index <= 501; index++ ) {
+                for ( var index = 1; index <= 101; index++ ) {
                     types.append( "type-" & index );
                 }
                 var result = variables.subscriptions.excludedIdsMany( variables.owner, types );
-                expect( result.len() ).toBe( 501 );
+                expect( result.len() ).toBe( 101 );
                 expect( variables.queries.len() ).toBe( 2 );
                 expect( result.every( ( ids ) => ids.isEmpty() ) ).toBeTrue();
             } );

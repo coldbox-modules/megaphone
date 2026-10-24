@@ -467,6 +467,8 @@ Custom snapshot hashers may implement `digestMany(entries)`, where each ordered 
 
 `NotificationPreferenceService.resolvePreferencesMany(requests)` accepts ordered structs containing `notifiable`, `notificationType`, `defaults`, and `scopeKeys`, matching `resolvePreferences()`. It returns the same `{ scopes, effective }` configuration per request, preserving recipient ownership, ordered scope precedence, and source labels without a shared preference cache. With the stock PostgreSQL/QB14 implementation, validated preference identities use bounded JSON recordset queries (at most 1000 requests and 1 MiB of JSON characters per parameter). Scope comparisons still use database equality and retain duplicate request/scope ordering. Other builders, grammars, stores, and QB9 use the original typed identity queries.
 
+`PushSubscriptionService.getExcludedIdsMany(notifiable, notificationTypes)` returns an array of device-ID arrays in input order, matching `getExcludedIds()` for each type. Missing types return empty arrays, and duplicate inputs return independent arrays. It uses the same bounded identity reader as other storage APIs (at most 100 requests per query), preserving recipient ownership, configured storage options, and database comparison rules. An empty batch executes no query. No preference or device state is cached.
+
 ### Module configuration
 
 ```cfc
@@ -587,7 +589,3 @@ WireBox names such as `NotificationPlan@megaphone` and `WebPushRuntime@megaphone
 ### Named email digests
 
 Collect notifications through `EmailDigestProvider@megaphone` into independent named subscriptions and schedules. `EmailDigestService@megaphone` freezes due batches and sends them through a receipt-aware email channel. Collection, email acceptance, and uncertain sends remain separate states. See [Named email digests](docs/email-digests.md) for configuration, policies, scheduler integration, and per-digest unsubscribe.
-
-### Batched device exclusions
-
-Use `PushSubscriptionService@megaphone.getExcludedIdsMany(notifiable, notificationTypes)` to read exclusions for multiple types. Results are arrays of device IDs in input order, including empty arrays for missing types and independent arrays for duplicate inputs. Reads remain scoped to the recipient type and ID, preserve case-sensitive notification types, and use at most 500 distinct types per query. An empty batch executes no query. No preference or device state is cached.

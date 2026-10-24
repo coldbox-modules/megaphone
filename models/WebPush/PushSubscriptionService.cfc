@@ -83,7 +83,10 @@ component singleton {
         return variables.store.excludedIds( argumentCollection = arguments );
     }
 
-    /** Ordered, recipient-owned exclusions; missing types return empty arrays. */
+    /**
+     * Returns owned device IDs for each notification type in input order. Missing types return empty arrays.
+     * @returns array
+     */
     public array function getExcludedIdsMany( required any notifiable, required array notificationTypes ) {
         return variables.store.excludedIdsMany( argumentCollection = arguments );
     }
