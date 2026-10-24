@@ -467,6 +467,8 @@ Custom snapshot hashers may implement `digestMany(entries)`, where each ordered 
 
 `NotificationPreferenceService.resolvePreferencesMany(requests)` accepts ordered structs containing `notifiable`, `notificationType`, `defaults`, and `scopeKeys`, matching `resolvePreferences()`. It returns the same `{ scopes, effective }` configuration per request, preserving recipient ownership, ordered scope precedence, and source labels without a shared preference cache. With the stock PostgreSQL/QB14 implementation, validated preference identities use bounded JSON recordset queries (at most 1000 requests and 1 MiB of JSON characters per parameter). Scope comparisons still use database equality and retain duplicate request/scope ordering. Other builders, grammars, stores, and QB9 use the original typed identity queries.
 
+`PushSubscriptionService.getExcludedIdsForTypes(notifiable, notificationTypes)` returns a case-sensitive struct keyed by notification type, matching `getExcludedIds()` for each type. Missing types map to empty arrays, and repeated input types share one key. It uses the same bounded identity reader as other storage APIs (at most 100 distinct types per query), preserving recipient ownership, configured storage options, and database comparison rules. An empty batch executes no query. No preference or device state is cached.
+
 ### Module configuration
 
 ```cfc

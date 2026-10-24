@@ -263,6 +263,41 @@ component accessors="true" {
             .map( ( row ) => row.deviceId );
     }
 
+    /**
+     * Returns a struct of excluded device-ID arrays keyed by notification type.
+     * @returns struct
+     */
+    public struct function excludedIdsForTypes( required any notifiable, required array notificationTypes ) {
+        var owner = recipient( arguments.notifiable );
+        var identities = [];
+        // A Java map preserves distinct type keys on engines without native case-sensitive structs.
+        var result = createObject( "java", "java.util.LinkedHashMap" ).init();
+        for ( var notificationType in arguments.notificationTypes ) {
+            if ( !isSimpleValue( notificationType ) || !len( trim( notificationType ) ) || len( notificationType ) > 160 ) {
+                throw( type = "Megaphone.Push.InvalidExclusion", message = "A valid notification type is required." );
+            }
+            var type = toString( notificationType );
+            if ( !result.containsKey( type ) ) {
+                result.put( type, [] );
+                identities.append( { "recipientType": owner.recipientType, "recipientId": owner.recipientId, "notificationType": type } );
+            }
+        }
+        // The shared reader preserves database equality, including case-insensitive collations.
+        var records = new megaphone.models.Storage.BulkRecords().read(
+            queryFactory = () => newExclusionQuery(),
+            identities = identities,
+            tableName = variables.properties.exclusionsTable ?: "megaphone_device_exclusions",
+            columns = [ "deviceId" ]
+        );
+        for ( var index = 1; index <= identities.len(); index++ ) {
+            result.put(
+                identities[ index ].notificationType,
+                records[ index ].map( ( row ) => row.deviceId ).sort( "text" )
+            );
+        }
+        return result;
+    }
+
     /** Retire expired owned destinations independently, retaining device identity and exclusions. */
     public numeric function retireExpired( any notifiable, date clock = now(), numeric limit = 100 ) {
         if ( arguments.limit < 1 || arguments.limit > 1000 || fix( arguments.limit ) != arguments.limit ) {
