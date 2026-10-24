@@ -264,21 +264,23 @@ component accessors="true" {
     }
 
     /**
-     * Returns one list of excluded device IDs for each requested notification type, in the same order.
-     * @returns array
+     * Returns a struct of excluded device-ID arrays keyed by notification type.
+     * @returns struct
      */
-    public array function excludedIdsForTypes( required any notifiable, required array notificationTypes ) {
+    public struct function excludedIdsForTypes( required any notifiable, required array notificationTypes ) {
         var owner = recipient( arguments.notifiable );
         var identities = [];
+        // A Java map preserves distinct type keys on engines without native case-sensitive structs.
+        var result = createObject( "java", "java.util.LinkedHashMap" ).init();
         for ( var notificationType in arguments.notificationTypes ) {
             if ( !isSimpleValue( notificationType ) || !len( trim( notificationType ) ) || len( notificationType ) > 160 ) {
                 throw( type = "Megaphone.Push.InvalidExclusion", message = "A valid notification type is required." );
             }
-            identities.append( {
-                "recipientType": owner.recipientType,
-                "recipientId": owner.recipientId,
-                "notificationType": notificationType
-            } );
+            var type = toString( notificationType );
+            if ( !result.containsKey( type ) ) {
+                result.put( type, [] );
+                identities.append( { "recipientType": owner.recipientType, "recipientId": owner.recipientId, "notificationType": type } );
+            }
         }
         // The shared reader preserves database equality, including case-insensitive collations.
         var records = new megaphone.models.Storage.BulkRecords().read(
@@ -287,7 +289,13 @@ component accessors="true" {
             tableName = variables.properties.exclusionsTable ?: "megaphone_device_exclusions",
             columns = [ "deviceId" ]
         );
-        return records.map( ( rows ) => rows.map( ( row ) => row.deviceId ).sort( "text" ) );
+        for ( var index = 1; index <= identities.len(); index++ ) {
+            result.put(
+                identities[ index ].notificationType,
+                records[ index ].map( ( row ) => row.deviceId ).sort( "text" )
+            );
+        }
+        return result;
     }
 
     /** Retire expired owned destinations independently, retaining device identity and exclusions. */

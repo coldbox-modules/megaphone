@@ -84,10 +84,10 @@ component singleton {
     }
 
     /**
-     * Returns owned device IDs for each notification type in input order. Missing types return empty arrays.
-     * @returns array
+     * Returns excluded device-ID arrays keyed by notification type. Missing types map to empty arrays.
+     * @returns struct
      */
-    public array function getExcludedIdsForTypes( required any notifiable, required array notificationTypes ) {
+    public struct function getExcludedIdsForTypes( required any notifiable, required array notificationTypes ) {
         return variables.store.excludedIdsForTypes( argumentCollection = arguments );
     }
     /**

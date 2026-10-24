@@ -30,7 +30,7 @@ component extends="tests.specs.integration.SubscriptionStoreSpec" {
                     }
                 }
             } );
-            it( "matches scalar database comparisons while preserving order, missing types and recipient ownership in one read", () => {
+            it( "returns type-keyed exclusions matching scalar database comparisons and recipient ownership in one read", () => {
                 var first = register( variables.owner, "batch-first" );
                 var second = register( variables.owner, "batch-second" );
                 var foreign = register( variables.other, "batch-other" );
@@ -71,15 +71,22 @@ component extends="tests.specs.integration.SubscriptionStoreSpec" {
                 var result = variables.push.getExcludedIdsForTypes( variables.owner, types );
                 expect( variables.queries.len() ).toBe( 1 );
                 expect( find( "notice-'?--", variables.queries[ 1 ].sql ) ).toBe( 0 );
-                expect( result ).toBe( expected );
-                expect( result[ 1 ].contains( foreign.id ) ).toBeFalse();
-                expect( result[ 1 ].contains( differentDevice.id ) ).toBeFalse();
-                result[ 1 ].append( "modified" );
-                expect( result[ 4 ] ).toBe( expected[ 4 ] );
+                expect( isStruct( result ) ).toBeTrue();
+                expect( structCount( result ) ).toBe( 3 );
+                var serialized = serializeJSON( result );
+                expect( find( serializeJSON( types[ 1 ] ), serialized ) > 0 ).toBeTrue();
+                expect( find( serializeJSON( types[ 3 ] ), serialized ) > 0 ).toBeTrue();
                 for ( var index = 1; index <= types.len(); index++ ) {
-                    expect( variables.push.getExcludedIdsForTypes( variables.owner, [ types[ index ] ] )[ 1 ] ).toBe(
-                        variables.push.getExcludedIds( variables.owner, types[ index ] )
-                    );
+                    expect( result[ types[ index ] ] ).toBe( expected[ index ] );
+                }
+                expect( result[ types[ 1 ] ].contains( foreign.id ) ).toBeFalse();
+                expect( result[ types[ 1 ] ].contains( differentDevice.id ) ).toBeFalse();
+                result[ types[ 1 ] ].append( "modified" );
+                expect( result[ types[ 3 ] ] ).toBe( expected[ 3 ] );
+                for ( var index = 1; index <= types.len(); index++ ) {
+                    expect(
+                        variables.push.getExcludedIdsForTypes( variables.owner, [ types[ index ] ] )[ types[ index ] ]
+                    ).toBe( variables.push.getExcludedIds( variables.owner, types[ index ] ) );
                 }
             } );
             it( "bounds requests and executes no SQL for empty or invalid batches", () => {
@@ -99,12 +106,21 @@ component extends="tests.specs.integration.SubscriptionStoreSpec" {
                 expect( variables.queries ).toBeEmpty();
                 var types = [];
                 for ( var index = 1; index <= 101; index++ ) {
-                    types.append( "type-" & index );
+                    types.append( index == 1 ? "containsKey" : "type-" & index );
                 }
                 var result = variables.subscriptions.excludedIdsForTypes( variables.owner, types );
-                expect( result.len() ).toBe( 101 );
+                expect( structCount( result ) ).toBe( 101 );
                 expect( variables.queries.len() ).toBe( 2 );
-                expect( result.every( ( ids ) => ids.isEmpty() ) ).toBeTrue();
+                for ( var type in result ) {
+                    expect( result[ type ] ).toBeEmpty();
+                }
+                variables.queries.clear();
+                var repeated = [];
+                for ( var index = 1; index <= 101; index++ ) {
+                    repeated.append( "put" );
+                }
+                expect( structCount( variables.push.getExcludedIdsForTypes( variables.owner, repeated ) ) ).toBe( 1 );
+                expect( variables.queries.len() ).toBe( 1 );
             } );
         } );
     }
