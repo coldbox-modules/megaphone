@@ -264,10 +264,10 @@ component accessors="true" {
     }
 
     /**
-     * Lists owned exclusions in notification-type input order using bounded identity reads.
+     * Returns one list of excluded device IDs for each requested notification type, in the same order.
      * @returns array
      */
-    public array function excludedIdsMany( required any notifiable, required array notificationTypes ) {
+    public array function excludedIdsForTypes( required any notifiable, required array notificationTypes ) {
         var owner = recipient( arguments.notifiable );
         var identities = [];
         for ( var notificationType in arguments.notificationTypes ) {

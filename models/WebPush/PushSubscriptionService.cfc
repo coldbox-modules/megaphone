@@ -87,8 +87,8 @@ component singleton {
      * Returns owned device IDs for each notification type in input order. Missing types return empty arrays.
      * @returns array
      */
-    public array function getExcludedIdsMany( required any notifiable, required array notificationTypes ) {
-        return variables.store.excludedIdsMany( argumentCollection = arguments );
+    public array function getExcludedIdsForTypes( required any notifiable, required array notificationTypes ) {
+        return variables.store.excludedIdsForTypes( argumentCollection = arguments );
     }
     /**
      * Retires a bounded set of expired active registrations independently.

@@ -68,7 +68,7 @@ component extends="tests.specs.integration.SubscriptionStoreSpec" {
                 ];
                 var expected = types.map( ( type ) => variables.subscriptions.excludedIds( variables.owner, type ) );
                 variables.queries.clear();
-                var result = variables.push.getExcludedIdsMany( variables.owner, types );
+                var result = variables.push.getExcludedIdsForTypes( variables.owner, types );
                 expect( variables.queries.len() ).toBe( 1 );
                 expect( find( "notice-'?--", variables.queries[ 1 ].sql ) ).toBe( 0 );
                 expect( result ).toBe( expected );
@@ -77,23 +77,23 @@ component extends="tests.specs.integration.SubscriptionStoreSpec" {
                 result[ 1 ].append( "modified" );
                 expect( result[ 4 ] ).toBe( expected[ 4 ] );
                 for ( var index = 1; index <= types.len(); index++ ) {
-                    expect( variables.push.getExcludedIdsMany( variables.owner, [ types[ index ] ] )[ 1 ] ).toBe(
+                    expect( variables.push.getExcludedIdsForTypes( variables.owner, [ types[ index ] ] )[ 1 ] ).toBe(
                         variables.push.getExcludedIds( variables.owner, types[ index ] )
                     );
                 }
             } );
             it( "bounds requests and executes no SQL for empty or invalid batches", () => {
                 variables.queries.clear();
-                expect( variables.subscriptions.excludedIdsMany( variables.owner, [] ) ).toBeEmpty();
+                expect( variables.subscriptions.excludedIdsForTypes( variables.owner, [] ) ).toBeEmpty();
                 expect( variables.queries ).toBeEmpty();
-                expect( () => variables.subscriptions.excludedIdsMany( variables.owner, [ "valid", "" ] ) ).toThrow(
+                expect( () => variables.subscriptions.excludedIdsForTypes( variables.owner, [ "valid", "" ] ) ).toThrow(
                     type = "Megaphone.Push.InvalidExclusion"
                 );
                 expect( variables.queries ).toBeEmpty();
-                expect( () => variables.subscriptions.excludedIdsMany( variables.owner, [ {} ] ) ).toThrow(
+                expect( () => variables.subscriptions.excludedIdsForTypes( variables.owner, [ {} ] ) ).toThrow(
                     type = "Megaphone.Push.InvalidExclusion"
                 );
-                expect( () => variables.subscriptions.excludedIdsMany( variables.owner, [ repeatString( "x", 161 ) ] ) ).toThrow(
+                expect( () => variables.subscriptions.excludedIdsForTypes( variables.owner, [ repeatString( "x", 161 ) ] ) ).toThrow(
                     type = "Megaphone.Push.InvalidExclusion"
                 );
                 expect( variables.queries ).toBeEmpty();
@@ -101,7 +101,7 @@ component extends="tests.specs.integration.SubscriptionStoreSpec" {
                 for ( var index = 1; index <= 101; index++ ) {
                     types.append( "type-" & index );
                 }
-                var result = variables.subscriptions.excludedIdsMany( variables.owner, types );
+                var result = variables.subscriptions.excludedIdsForTypes( variables.owner, types );
                 expect( result.len() ).toBe( 101 );
                 expect( variables.queries.len() ).toBe( 2 );
                 expect( result.every( ( ids ) => ids.isEmpty() ) ).toBeTrue();
