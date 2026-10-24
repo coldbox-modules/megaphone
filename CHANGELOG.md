@@ -1,3 +1,15 @@
+# v1.4.0
+## 24 Oct 2026 — 23:03:48 UTC
+
+### feat
+
++ __push:__ batch device exclusion lookups (#6) ([afb305d](https://github.com/coldbox-modules/megaphone/commit/afb305d0989092dc63d2939e0cb8987f926716bc))
+
+### fix
+
++ __push:__ preserve exclusion keys across engines (#7) ([b31f66a](https://github.com/coldbox-modules/megaphone/commit/b31f66ac9ebeb06be659e0ea1b0058250eba3275))
+
+
 # v1.3.0
 ## 21 Oct 2026 — 22:28:35 UTC
 
