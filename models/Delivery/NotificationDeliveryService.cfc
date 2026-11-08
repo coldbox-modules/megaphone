@@ -133,6 +133,20 @@ component singleton {
             } );
     }
 
+    /** Counts each event's channel states after applying the application's constraints. */
+    public array function getEventStateCounts( any constraints ) {
+        return variables.deliveryStore
+            .eventStateCounts( argumentCollection = arguments )
+            .map( ( row ) => {
+                return {
+                    "eventId": row.eventId,
+                    "channelName": row.channel,
+                    "state": row.state,
+                    "total": row.total
+                };
+            } );
+    }
+
     /**
      * Returns a bounded set of deliveries eligible for worker pickup.
      * @returns array

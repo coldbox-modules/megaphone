@@ -522,6 +522,8 @@ Use `prepared.getData()` for transient transport objects. Its memento contains s
 
 Duplicate jobs cannot share a lease. Preparation failures and feature pauses do not consume transport allowance. An exception after transport starts is ambiguous and cannot trigger an automatic resend. Acceptance does not establish receipt or read state. Do not wrap provider I/O in an application transaction.
 
+For backend reports, `getStateCounts(constraints)` returns channel/state totals. `getEventStateCounts(constraints)` retains each `eventId` alongside `channelName`, `state`, and `total`, grouping the selected deliveries in one database query. Both apply the application's query constraints before aggregation. Authorize and scope the selection in the application; these reports do not change delivery state or perform provider I/O.
+
 ## Preferences and Web Push
 
 `NotificationPreferenceService@megaphone` provides `getPreferences`, `setPreference`, `resolvePreferences`, `importPreference`, `prunePreferences`, and `deleteNotifiable`. Supply a notifiable, notification type, and application-defined scopes. `setPreference(notifiable, notificationType, scopeKey, channelName, choice)` stores `on` or `off`; `inherit` removes the exact override. `resolvePreferences(notifiable, notificationType, defaults, scopeKeys)` applies scopes from broadest to most specific and returns both explicit scopes and effective values. Authorize scope access in the application.
