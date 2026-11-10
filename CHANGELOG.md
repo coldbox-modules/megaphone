@@ -1,3 +1,11 @@
+# v1.4.1
+## 10 Nov 2026 — 04:14:42 UTC
+
+### fix
+
++ __queue:__ keep ordinary admission batched with configured digests ([36c7371](https://github.com/coldbox-modules/megaphone/commit/36c737190385679178d9776d7dbe7d55c7db4b20))
+
+
 # v1.4.0
 ## 24 Oct 2026 — 23:03:48 UTC
 
