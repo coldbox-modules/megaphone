@@ -184,19 +184,30 @@ component extends="tests.resources.BulkNotificationSpecBase" {
                 expect( eventCount( [ input.options.eventKey ] ) ).toBe( 0 );
                 expect( variables.adapter.getReferences() ).toBeEmpty();
             } );
-            it( "constructs mapped Plans before any writes for global digest fallback", () => {
+            it( "batches ordinary requests when unrelated digests are configured", () => {
                 variables.config.digests = { "independent": {} };
-                variables.injector
-                    .getBinder()
-                    .map( "NotificationPlan@megaphone" )
-                    .to( "tests.resources.ResultModelConstructionGuard" );
+                guardModels();
                 var input = notificationRequest( createUUID() );
-                expect( () => variables.service.admitRequests( [ input ] ) ).toThrow(
-                    type = "Builder.BuildCFCDependencyException",
-                    regex = "No-result admission constructed a public result model"
-                );
-                expect( eventCount( [ input.options.eventKey ] ) ).toBe( 0 );
-                expect( variables.adapter.getReferences() ).toBeEmpty();
+                input.notifiables = [ variables.owner, new tests.resources.InboxRecipient().setId( createUUID() ) ];
+                variables.service.admitRequests( [ input ] );
+                expect( variables.adapter.getReferenceBatches().len() ).toBe( 1 );
+                expect( variables.adapter.getReferences().len() ).toBe( 4 );
+                var first = variables.deliveries.find( variables.adapter.getReferences()[ 1 ].id );
+                expect( variables.deliveries.forEvent( first.eventId ).len() ).toBe( 6 );
+                variables.service.admitRequests( [ input ] );
+                expect( variables.adapter.getReferenceBatches().len() ).toBe( 1 );
+            } );
+            it( "batches ordinary saved plans when unrelated digests are configured", () => {
+                variables.config.digests = { "independent": {} };
+                var plans = variables.service.planMany( [ notificationRequest( createUUID() ) ] );
+                guardModels();
+                variables.service.admitPlans( plans );
+                expect( variables.adapter.getReferenceBatches().len() ).toBe( 1 );
+                expect( variables.adapter.getReferences().len() ).toBe( 2 );
+                var first = variables.deliveries.find( variables.adapter.getReferences()[ 1 ].id );
+                expect( variables.deliveries.forEvent( first.eventId ).len() ).toBe( 3 );
+                variables.service.admitPlans( plans );
+                expect( variables.adapter.getReferenceBatches().len() ).toBe( 1 );
             } );
         } );
     }
