@@ -279,10 +279,9 @@ component singleton accessors="true" {
             return;
         }
         var runtime = newNotificationRuntime();
-        var settings = runtime.getSettings();
         var adapter = runtime.resolve( "queueAdapter" );
-        var fallback = isNull( adapter ) || !isCustomFunction( adapter.enqueueReferencesMany ?: "" ) ||
-        ( structKeyExists( settings, "digests" ) && !structIsEmpty( settings.digests ) );
+        // Unrelated configured digests must not disable batching for ordinary delivery intents.
+        var fallback = isNull( adapter ) || !isCustomFunction( adapter.enqueueReferencesMany ?: "" );
         var captures = [];
         var snapshotters = {};
         for ( var inputRequest in arguments.requests ) {
@@ -361,10 +360,8 @@ component singleton accessors="true" {
             return;
         }
         var runtime = newNotificationRuntime();
-        var settings = runtime.getSettings();
         var adapter = runtime.resolve( "queueAdapter" );
-        var fallback = isNull( adapter ) || !isCustomFunction( adapter.enqueueReferencesMany ?: "" ) ||
-        ( structKeyExists( settings, "digests" ) && !structIsEmpty( settings.digests ) );
+        var fallback = isNull( adapter ) || !isCustomFunction( adapter.enqueueReferencesMany ?: "" );
         var captures = arguments.plans.map( ( plan ) => plan.getMemento() );
         for ( var captured in captures ) {
             for ( var intent in captured.deliveries ) {
