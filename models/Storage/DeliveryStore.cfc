@@ -315,6 +315,19 @@ component accessors="true" {
 
     /** Trusted backend reconciliation: filters apply before aggregate counts. */
     public array function stateCounts( any constraints ) {
+        return stateCountsQuery( argumentCollection = arguments ).get();
+    }
+
+    /** Event-scoped state groups, without loading individual delivery objects. */
+    public array function eventStateCounts( any constraints ) {
+        return stateCountsQuery( argumentCollection = arguments )
+            .addSelect( "delivery.eventId" )
+            .groupBy( "delivery.eventId" )
+            .orderBy( "delivery.eventId" )
+            .get();
+    }
+
+    private any function stateCountsQuery( any constraints ) {
         var qb = newDeliveryQuery().from( ( getTableName() ) & " AS delivery" );
         if ( !isNull( arguments.constraints ) ) {
             arguments.constraints( qb );
@@ -324,8 +337,7 @@ component accessors="true" {
             .selectRaw( "COUNT(DISTINCT delivery.id) AS total" )
             .groupBy( [ "delivery.channel", "delivery.state" ] )
             .orderBy( "delivery.channel" )
-            .orderBy( "delivery.state" )
-            .get();
+            .orderBy( "delivery.state" );
     }
 
     /**
