@@ -134,6 +134,24 @@ component singleton {
     }
 
     /**
+     * Counts distinct deliveries per event, channel and state after application constraints.
+     * @constraints Optional callback receiving a qb query with the delivery table aliased as delivery.
+     * @returns Array of structs containing eventId, channelName, state and total.
+     */
+    public array function getEventStateCounts( any constraints ) {
+        return variables.deliveryStore
+            .eventStateCounts( argumentCollection = arguments )
+            .map( ( row ) => {
+                return {
+                    "eventId": row.eventId,
+                    "channelName": row.channel,
+                    "state": row.state,
+                    "total": row.total
+                };
+            } );
+    }
+
+    /**
      * Returns a bounded set of deliveries eligible for worker pickup.
      * @returns array
      */
