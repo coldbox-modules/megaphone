@@ -1,3 +1,11 @@
+# v1.5.0
+## 10 Nov 2026 — 06:53:33 UTC
+
+### feat
+
++ __delivery:__ expose event state counts (#9) ([4dee28f](https://github.com/coldbox-modules/megaphone/commit/4dee28f6692bbc68771acd5ca95d73128aac9dee))
+
+
 # v1.4.1
 ## 10 Nov 2026 — 04:14:42 UTC
 
