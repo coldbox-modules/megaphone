@@ -58,7 +58,9 @@ jobs:
           java-version: ${{ matrix.engine.java }}
 
       - name: Set Up CommandBox
-        uses: elpete/setup-commandbox@v1.0.0
+        uses: Ortus-Solutions/setup-commandbox@157ba183d42a6f1abfcbaa4c303072f95837f417 # v2.0.1
+        with:
+          installSystemModules: true
 
       - name: Install BoxLang support
         if: startsWith(matrix.engine.cfengine, 'boxlang')
@@ -134,7 +136,9 @@ jobs:
   #         java-version: 11
 
   #     - name: Set Up CommandBox
-  #       uses: elpete/setup-commandbox@v1.0.0
+  #       uses: Ortus-Solutions/setup-commandbox@157ba183d42a6f1abfcbaa4c303072f95837f417 # v2.0.1
+  #       with:
+  #         installSystemModules: true
 
   #     - name: Install and Configure Semantic Release
   #       run: |
