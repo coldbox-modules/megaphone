@@ -1,3 +1,11 @@
+# v1.5.1
+## 16 Nov 2026 — 04:26:29 UTC
+
+### fix
+
++ __ci:__ replace apt-key setup and allow manual cron runs (#10) ([cdcf516](https://github.com/coldbox-modules/megaphone/commit/cdcf516922f179009a4616976c0e8d993033bf89))
+
+
 # v1.5.0
 ## 10 Nov 2026 — 06:53:33 UTC
 
