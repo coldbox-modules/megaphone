@@ -518,11 +518,12 @@ component singleton {
             try {
                 var found = ensureSubscription( arguments.notifiable, definition, instant );
                 var current = variables.store.subscription( found.id, true );
+                // Named values avoid Adobe 2025's short-circuit compilation bug with struct literals.
+                var digestContext = {};
+                var currentScheduleDigest = variables.hasher.digest( current.schedule, digestContext );
+                var requestedScheduleDigest = variables.hasher.digest( timing, digestContext );
                 if (
-                    current.mode == arguments.mode && current.timezone == zone && variables.hasher.digest(
-                        current.schedule,
-                        {}
-                    ) == variables.hasher.digest( timing, {} )
+                    current.mode == arguments.mode && current.timezone == zone && currentScheduleDigest == requestedScheduleDigest
                 ) {
                     return current;
                 }
