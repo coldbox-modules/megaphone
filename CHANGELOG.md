@@ -1,3 +1,11 @@
+# v1.5.2
+## 16 Nov 2026 — 05:03:48 UTC
+
+### fix
+
++ __ci:__ restore snapshot engine compatibility (#11) ([be01be5](https://github.com/coldbox-modules/megaphone/commit/be01be585191dc5bd4a7d7790ae213bdb7b71e53))
+
+
 # v1.5.1
 ## 16 Nov 2026 — 04:26:29 UTC
 
