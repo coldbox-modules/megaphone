@@ -86,7 +86,7 @@ jobs:
           box install
           box config set modules.commandbox-dotenv.checkEnvPreServerStart=false
           box install ${{ matrix.coldbox }} --noSave
-          if [[ "${{ matrix.engine.cfengine }}" == boxlang* ]]; then
+          if [[ "${{ matrix.engine.cfengine }}" == boxlang* || "${{ matrix.coldbox }}" == "coldbox@be" ]]; then
             box install testbox@6 --noSave
             box install qb@14 --noSave
             box install cbq@7 --noSave
@@ -116,7 +116,9 @@ jobs:
           DB_PASSWORD: megaphone
           COLDBOX_VERSION: ${{ matrix.coldbox }}
         run: |
-          if [[ -n "${{ matrix.engine.serverConfig }}" ]]; then
+          if [[ "${{ matrix.engine.cfengine }}" == "lucee@be" ]]; then
+            box task run .github/tasks/StartLuceeSnapshot.cfc
+          elif [[ -n "${{ matrix.engine.serverConfig }}" ]]; then
             box server start serverConfigFile="${{ matrix.engine.serverConfig }}" cfengine="${{ matrix.engine.cfengine }}" javaVersion=openjdk${{ matrix.engine.java }}_jdk --noSaveSettings
           else
             box server start cfengine=${{ matrix.engine.cfengine }} javaVersion=openjdk${{ matrix.engine.java }}
