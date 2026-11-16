@@ -1,3 +1,11 @@
+# v1.5.3
+## 16 Nov 2026 — 05:29:36 UTC
+
+### fix
+
++ __ci:__ retry cron dependency installs (#12) ([51a309b](https://github.com/coldbox-modules/megaphone/commit/51a309bb19a3bb4c10a65baecb02259677c731a8))
+
+
 # v1.5.2
 ## 16 Nov 2026 — 05:03:48 UTC
 
