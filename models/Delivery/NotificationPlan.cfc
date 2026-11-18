@@ -55,18 +55,26 @@ component accessors="true" {
         variables.event = duplicate( arguments.memento.event );
         variables.deliveries = duplicate( arguments.memento.deliveries );
         if ( !isNull( variables.event.createdDate ) ) {
-            variables.event.createdDate = parseDateTime( variables.event.createdDate );
+            variables.event.createdDate = restoreDate( variables.event.createdDate );
         }
         for ( var intent in variables.deliveries ) {
             if ( !isNull( intent.availableDate ) ) {
-                intent.availableDate = parseDateTime( intent.availableDate );
+                intent.availableDate = restoreDate( intent.availableDate );
             }
         }
         structDelete( variables, "admitAfter" );
         if ( !isNull( arguments.memento.admitAfter ) ) {
-            variables.admitAfter = parseDateTime( arguments.memento.admitAfter );
+            variables.admitAfter = restoreDate( arguments.memento.admitAfter );
         }
         return this;
+    }
+
+    /** JDBC dates already identify an instant; only serialized dates need parsing. */
+    private any function restoreDate( required any value ) {
+        if ( isInstanceOf( arguments.value, "java.util.Date" ) ) {
+            return arguments.value;
+        }
+        return parseDateTime( arguments.value );
     }
 
     /**
