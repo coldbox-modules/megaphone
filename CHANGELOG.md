@@ -1,3 +1,11 @@
+# v1.5.4
+## 18 Nov 2026 — 14:23:31 UTC
+
+### other
+
++ __\*:__ fix: preserve JDBC timestamps when restoring notification plans (#13) ([71a2d19](https://github.com/coldbox-modules/megaphone/commit/71a2d1936edc4b69ac5b967ddac8c342d3330b06))
+
+
 # v1.5.3
 ## 16 Nov 2026 — 05:29:36 UTC
 
